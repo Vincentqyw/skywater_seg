@@ -76,18 +76,18 @@ train:
   loss: dice_ce
   ce_weight: 0.5
   dice_weight: 0.5
-  class_weights: null
+  class_weights: [0.3, 2.0, 2.0, 2.0]           # penalize background, reward foreground
 
   mixed_precision: true                              # AMP FP16
   gradient_accumulation: 1
   grad_clip: 1.0
   num_workers: 0                               # Windows: must be 0 to avoid shared memory errors
 
-  val_every: 2
-  save_every: 10
+  val_every: 1
+  save_every: 1
   early_stopping_patience: 20
 
-  log_every: 20
+  log_every: 2
   tensorboard: true
   wandb: false
 

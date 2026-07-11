@@ -43,12 +43,15 @@ def compute_iou(
         intersection = (pred_c & target_c).sum().float()
         union = (pred_c | target_c).sum().float()
 
-        iou = (intersection + 1e-6) / (union + 1e-6)
-        ious[f"iou_class_{c}"] = round(iou.item(), 4)
+        if union > 0:
+            ious[f"iou_class_{c}"] = round((intersection / union).item(), 4)
+        else:
+            ious[f"iou_class_{c}"] = float("nan")  # class absent from batch
 
-    # Mean IoU over foreground classes only
-    fg_ious = [ious[f"iou_class_{c}"] for c in range(1, num_classes)]
-    ious["miou"] = round(np.mean(fg_ious), 4)
+    # Mean IoU over foreground classes (skip NaN = absent from batch)
+    fg_vals = [v for c, v in ious.items()
+               if c.startswith("iou_class_") and c != "iou_class_0" and not np.isnan(v)]
+    ious["miou"] = round(np.mean(fg_vals) if fg_vals else 0.0, 4)
 
     return ious
 
@@ -70,11 +73,14 @@ def compute_dice(
         intersection = (pred_c & target_c).sum().float()
         total = pred_c.sum().float() + target_c.sum().float()
 
-        dice = (2.0 * intersection + 1e-6) / (total + 1e-6)
-        dices[f"dice_class_{c}"] = round(dice.item(), 4)
+        if total > 0:
+            dices[f"dice_class_{c}"] = round((2.0 * intersection / total).item(), 4)
+        else:
+            dices[f"dice_class_{c}"] = float("nan")
 
-    fg_dices = [dices[f"dice_class_{c}"] for c in range(1, num_classes)]
-    dices["mdice"] = round(np.mean(fg_dices), 4)
+    fg_vals = [v for c, v in dices.items()
+               if c.startswith("dice_class_") and c != "dice_class_0" and not np.isnan(v)]
+    dices["mdice"] = round(np.mean(fg_vals) if fg_vals else 0.0, 4)
 
     return dices
 

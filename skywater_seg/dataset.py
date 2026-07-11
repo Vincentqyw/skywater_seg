@@ -1,10 +1,10 @@
 """
-PyTorch Dataset for sky/water segmentation.
+PyTorch Dataset for sky/water/person segmentation.
 
 Supports:
-  - Image + mask pairs (PNG masks with class values 0, 1, 2)
-  - Custom data splits (train/val .txt files)
-  - Albumentations-based augmentation pipeline
+  - Single dataset (image + mask pairs with class remapping)
+  - Multi-dataset mixed training (combine multiple sources via config)
+  - ADE20K, Cityscapes, and custom datasets
 """
 
 import os
@@ -16,15 +16,13 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from skywater_seg.config import DataConfig
+from skywater_seg.config import Config, DatasetConfig
 
+
+# ── Robust image/mask loading (PIL-based, avoid OpenCV JP2 decode issues) ──
 
 def _load_image_robust(path: str) -> np.ndarray:
-    """Load image as RGB numpy array using PIL only.
-
-    OpenCV has JPEG decoding issues on Windows; PIL is more reliable.
-    Returns None on failure.
-    """
+    """Load image as RGB numpy array using PIL. Returns None on failure."""
     try:
         from PIL import Image
         return np.array(Image.open(path).convert("RGB"), dtype=np.uint8)
@@ -33,7 +31,7 @@ def _load_image_robust(path: str) -> np.ndarray:
 
 
 def _load_mask_robust(path: str) -> np.ndarray:
-    """Load mask as grayscale numpy array using PIL only."""
+    """Load mask as grayscale numpy array using PIL. Returns None on failure."""
     try:
         from PIL import Image
         return np.array(Image.open(path), dtype=np.uint8)
@@ -41,15 +39,53 @@ def _load_mask_robust(path: str) -> np.ndarray:
         return None
 
 
+# ── Cityscapes-specific helpers ──
+
+def _find_cityscapes_pairs(image_dir: str, split: str, mask_dir: str) -> List[Tuple[str, str]]:
+    """Scan Cityscapes directory structure and return (image_path, mask_path) pairs."""
+    pairs = []
+    # Cityscapes uses "train"/"val", but try alternative names too
+    split_names = {"train": ["train", "training"], "val": ["val", "validation"]}
+    candidates = split_names.get(split, [split])
+
+    img_root = None
+    msk_root = None
+    for s in candidates:
+        if (Path(image_dir) / s).exists():
+            img_root = Path(image_dir) / s
+            msk_root = Path(mask_dir) / s
+            break
+
+    if img_root is None:
+        return pairs
+
+    if not img_root.exists():
+        return pairs
+
+    for city_dir in sorted(img_root.iterdir()):
+        if not city_dir.is_dir():
+            continue
+        for img_path in sorted(city_dir.glob("*_leftImg8bit.png")):
+            # Derive mask filename: aachen_000000_000019_leftImg8bit.png -> ..._gtFine_labelIds.png
+            stem = img_path.stem.replace("_leftImg8bit", "")
+            mask_path = msk_root / city_dir.name / f"{stem}_gtFine_labelIds.png"
+            if mask_path.exists():
+                pairs.append((str(img_path), str(mask_path)))
+
+    return pairs
+
+
+# ── Single Dataset ──
+
 class SkyWaterDataset(Dataset):
     """Dataset for sky/water/person segmentation.
 
-    Expects:
-      - image_dir: directory with RGB images
-      - mask_dir: directory with single-channel PNG masks
-        (0=background, 1=sky, 2=water, 3=person... or custom via class_mapping)
-
-    Mask files are matched by: {image_stem}_mask.png, or {image_stem}.png
+    Supports:
+      - Flat directory: image_dir/*.jpg + mask_dir/*_mask.png
+      - Split-file mode: file_list with one image name per line
+      - Subdirectory mode: image_dir/training/*.jpg + mask_dir/training/*.png
+      - Cityscapes mode: auto-detect city subdirectories (via cityscapes=True)
+      - Class remapping: class_mapping dict maps raw→target class indices
     """
 
     def __init__(
@@ -57,25 +93,14 @@ class SkyWaterDataset(Dataset):
         image_dir: str,
         mask_dir: str,
         image_size: Tuple[int, int] = (512, 512),
-        num_classes: int = 3,
+        num_classes: int = 4,
         augmentation: bool = False,
-        config: Optional[DataConfig] = None,
+        config: Optional["DataConfig"] = None,
         file_list: Optional[List[str]] = None,
         class_mapping: Optional[Dict[int, int]] = None,
+        cityscapes: bool = False,
+        split: str = "train",
     ):
-        """
-        Args:
-            image_dir: Path to image directory
-            mask_dir: Path to mask directory
-            image_size: Target (height, width)
-            num_classes: Number of classes (including background)
-            augmentation: Whether to apply augmentations
-            config: Full DataConfig for augmentation parameters
-            file_list: Optional list of image filenames (basenames with extension)
-            class_mapping: Optional dict mapping raw mask values → target class indices.
-                e.g. {3: 1, 13: 3, 22: 2} for ADE20K sky/person/water.
-                Pixels not in the mapping become 0 (background).
-        """
         self.image_dir = Path(image_dir)
         self.mask_dir = Path(mask_dir)
         self.image_size = image_size
@@ -83,147 +108,152 @@ class SkyWaterDataset(Dataset):
         self.augmentation = augmentation
         self.config = config
         self.class_mapping = class_mapping
+        self._cityscapes = cityscapes
+        self._split = split
 
-        # Gather image files
-        if file_list is not None:
+        # ── Gather images ──
+        if cityscapes:
+            self._pairs = _find_cityscapes_pairs(str(image_dir), split, str(mask_dir))
+            self.images = [p[0] for p in self._pairs]
+            self._masks = {p[0]: p[1] for p in self._pairs}
+        elif file_list is not None:
             self.images = file_list
+            self._pairs = None
+            self._masks = {}
+        elif (Path(image_dir) / split).exists() or \
+             (Path(image_dir) / f"{split}ing").exists() or \
+             (Path(image_dir) / ("" if split != "val" else "validation")).exists():
+            # Subdirectory mode: handles "train"/"val" (Cityscapes),
+            # "training"/"validation" (ADE20K)
+            candidates = [split]
+            if split == "train":
+                candidates.append("training")
+            elif split == "val":
+                candidates.extend(["validation", "val"])
+            for sub_name in candidates:
+                if (Path(image_dir) / sub_name).exists():
+                    sub_dir = Path(image_dir) / sub_name
+                    break
+            else:
+                sub_dir = Path(image_dir) / split
+            extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
+            self.images = sorted([
+                str(f.relative_to(Path(image_dir)))  # e.g. "training/ADE_001.jpg"
+                for f in sub_dir.rglob("*")
+                if f.suffix.lower() in extensions
+            ])
+            self._pairs = None
+            self._masks = {}
         else:
             extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
             self.images = sorted([
                 f.name for f in self.image_dir.glob("*")
                 if f.suffix.lower() in extensions
             ])
+            self._pairs = None
+            self._masks = {}
 
         if len(self.images) == 0:
             raise FileNotFoundError(f"No images found in {image_dir}")
 
-        # Set up augmentations
+        # ── Augmentation transforms ──
         if augmentation and config is not None:
-            import albumentations as A
             self.transform = self._build_transforms(config)
         else:
             self.transform = None
 
-    def _build_transforms(self, cfg: DataConfig):
+    def _build_transforms(self, cfg: "DataConfig"):
         import albumentations as A
-
         h, w = self.image_size
-
-        transforms = []
-
-        # Resize to target size first
-        transforms.append(A.Resize(height=h, width=w))
-
-        # Geometric
+        transforms = [A.Resize(height=h, width=w)]
         if cfg.horizontal_flip > 0:
             transforms.append(A.HorizontalFlip(p=cfg.horizontal_flip))
         if cfg.vertical_flip > 0:
             transforms.append(A.VerticalFlip(p=cfg.vertical_flip))
         if cfg.rotation > 0:
-            transforms.append(
-                A.Rotate(limit=cfg.rotation, border_mode=cv2.BORDER_CONSTANT, p=0.5)
-            )
-
-        # Color
-        transforms.append(
-            A.ColorJitter(
-                brightness=cfg.brightness,
-                contrast=cfg.contrast,
-                saturation=cfg.saturation,
-                hue=cfg.hue,
-                p=0.5,
-            )
-        )
-
-        # Random scale + crop
-        if cfg.random_crop:
-            transforms.append(
-                A.RandomResizedCrop(
-                    size=(h, w),
-                    scale=(0.5, 1.0),
-                    ratio=(0.9, 1.1),
-                    p=0.5,
-                )
-            )
-
-        # Normalization (applied at the end)
-        transforms.append(
-            A.Normalize(mean=cfg.mean, std=cfg.std)
-        )
-
+            transforms.append(A.Rotate(limit=cfg.rotation, border_mode=cv2.BORDER_CONSTANT, p=0.5))
+        transforms.append(A.ColorJitter(
+            brightness=cfg.brightness, contrast=cfg.contrast,
+            saturation=cfg.saturation, hue=cfg.hue, p=0.5))
+        transforms.append(A.Normalize(mean=cfg.mean, std=cfg.std))
         return A.Compose(transforms)
 
     def __len__(self) -> int:
         return len(self.images)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        image_name = self.images[idx]
-        stem = Path(image_name).stem
+        image_path = self._get_image_path(idx)
 
-        # Load image (use PIL first — more reliable on Windows; OpenCV fallback)
-        image_path = self.image_dir / image_name
-        image = _load_image_robust(str(image_path))
+        # Load image
+        image = _load_image_robust(image_path)
         if image is None:
-            # Corrupted image — return a blank sample instead of crashing
             h, w = self.image_size
-            image = np.zeros((h, w, 3), dtype=np.float32)
-            mask = np.zeros((h, w), dtype=np.uint8)
-            return {
-                "image": torch.from_numpy(image).permute(2, 0, 1).float(),
-                "mask": torch.from_numpy(mask).long(),
-                "name": image_name,
-            }
-        # image is already RGB
+            return {"image": torch.zeros((3, h, w), dtype=torch.float32),
+                    "mask": torch.zeros((h, w), dtype=torch.long),
+                    "name": Path(image_path).name}
 
         # Load mask
-        mask = self._load_mask(stem)
+        mask = self._load_mask(idx)
 
-        # Apply class remapping (e.g. ADE20K class indices → our class indices)
+        # Class remapping
         if self.class_mapping is not None:
-            mask = self._remap_mask(mask)
+            remapped = np.zeros_like(mask, dtype=np.uint8)
+            for raw_val, target_val in self.class_mapping.items():
+                remapped[mask == raw_val] = target_val
+            mask = remapped
 
-        # Resize to target size first (always)
+        # Resize
         h, w = self.image_size
         image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
         mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
-        # Apply transforms (augmentation + normalize for train, normalize-only for val)
+        # Augmentation
         if self.transform is not None:
             transformed = self.transform(image=image, mask=mask)
             image = transformed["image"]
             mask = transformed["mask"]
         else:
-            # Validation: apply only normalization (no augmentation)
             mean = self.config.mean if self.config else [0.485, 0.456, 0.406]
             std = self.config.std if self.config else [0.229, 0.224, 0.225]
             image = image.astype(np.float32) / 255.0
-            image = (image - np.array(mean, dtype=np.float32)) / \
-                    np.array(std, dtype=np.float32)
+            image = (image - np.array(mean, dtype=np.float32)) / np.array(std, dtype=np.float32)
 
-        # Convert to tensors
         if isinstance(image, np.ndarray):
-            image = torch.from_numpy(image).permute(2, 0, 1).float()  # (C, H, W)
+            image = torch.from_numpy(image).permute(2, 0, 1).float()
         if isinstance(mask, np.ndarray):
-            mask = torch.from_numpy(mask).long()  # (H, W)
-
-        # Ensure mask values are valid
+            mask = torch.from_numpy(mask).long()
         mask = torch.clamp(mask, 0, self.num_classes - 1)
 
-        return {
-            "image": image,
-            "mask": mask,
-            "name": image_name,
-        }
+        return {"image": image, "mask": mask, "name": Path(image_path).name}
 
-    def _load_mask(self, stem: str) -> np.ndarray:
-        """Load mask file, trying multiple naming conventions.
+    def _get_image_path(self, idx: int) -> str:
+        name = self.images[idx]
+        if self._masks:
+            return name  # Cityscapes mode: absolute paths stored
+        return str(self.image_dir / name)
 
-        Priority:
-          1. {stem}_mask.png
-          2. {stem}.png  (in mask_dir)
-          3. {stem}_mask.jpg
-        """
-        candidates = [
+    def _load_mask(self, idx: int) -> np.ndarray:
+        name = self.images[idx]
+
+        # Cityscapes mode: mask path stored alongside image
+        if self._masks and name in self._masks:
+            mask = _load_mask_robust(self._masks[name])
+            if mask is not None:
+                return mask
+
+        # Standard mode: derive mask from image name
+        stem = Path(name).stem
+
+        # Extract subdirectory from image name (e.g. "training/ADE_001.jpg" → "training")
+        subdir = Path(name).parent if name else Path(".")
+
+        candidates = []
+        if str(subdir) != ".":
+            candidates += [
+                self.mask_dir / subdir / f"{stem}_mask.png",
+                self.mask_dir / subdir / f"{stem}.png",
+            ]
+        candidates += [
             self.mask_dir / f"{stem}_mask.png",
             self.mask_dir / f"{stem}.png",
             self.mask_dir / f"{stem}_mask.jpg",
@@ -235,209 +265,238 @@ class SkyWaterDataset(Dataset):
                 if mask is not None:
                     return mask
 
-        # No mask found → return all-zeros
+        # No mask found — return zeros
         h, w = self.image_size
-        # Try to read image to get original size
-        image_path = self.image_dir / f"{stem}.jpg"
-        if not image_path.exists():
-            image_path = self.image_dir / f"{stem}.png"
-        if image_path.exists():
-            img = cv2.imread(str(image_path))
-            if img is not None:
-                h, w = img.shape[:2]
-
         return np.zeros((h, w), dtype=np.uint8)
 
-    def _remap_mask(self, mask: np.ndarray) -> np.ndarray:
-        """Remap raw mask pixel values to target class indices.
 
-        Uses self.class_mapping dict. Pixels not found in the mapping
-        become 0 (background).
+# ── Multi-Dataset Wrapper ──
 
-        Args:
-            mask: (H, W) uint8 array with raw pixel values
+class MultiDataset(Dataset):
+    """Concatenates multiple SkyWaterDataset instances for mixed training.
 
-        Returns:
-            (H, W) uint8 array with remapped class indices
-        """
-        remapped = np.zeros_like(mask, dtype=np.uint8)
-        for raw_val, target_val in self.class_mapping.items():
-            remapped[mask == raw_val] = target_val
-        return remapped
+    Supports weighted sampling: each dataset can have a `weight` to control
+    how often samples are drawn from it.
+    """
+
+    def __init__(self, datasets: List[SkyWaterDataset], weights: Optional[List[float]] = None):
+        self.datasets = datasets
+        if weights is None:
+            weights = [1.0] * len(datasets)
+        self.weights = weights
+
+        self._lengths = [len(d) for d in datasets]
+        self._offsets = []
+        offset = 0
+        for l in self._lengths:
+            self._offsets.append(offset)
+            offset += l
+
+    def __len__(self) -> int:
+        return sum(self._lengths)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        # Weighted random sampling if weights differ
+        if len(set(self.weights)) > 1:
+            ds_idx = np.random.choice(len(self.datasets), p=np.array(self.weights) / sum(self.weights))
+            local_idx = np.random.randint(0, self._lengths[ds_idx])
+        else:
+            # Uniform: find which dataset owns this index
+            for ds_idx in range(len(self.datasets) - 1, -1, -1):
+                if idx >= self._offsets[ds_idx]:
+                    local_idx = idx - self._offsets[ds_idx]
+                    break
+            else:
+                ds_idx, local_idx = 0, 0
+
+        return self.datasets[ds_idx][local_idx]
+
+    @property
+    def image_size(self):
+        return self.datasets[0].image_size
+
+    @property
+    def num_classes(self):
+        return self.datasets[0].num_classes
 
 
-def create_dataloaders(
-    config: "Config",
-) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+# ── Dataloader Factory ──
+
+def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
+                                                   torch.utils.data.DataLoader]:
     """Create train and validation dataloaders from config.
 
-    Supports three split modes (in priority order):
-      1. Explicit split files (train_split / val_split paths)
-      2. ADE20K-style subdirectory split (image_dir/training + image_dir/validation)
-      3. Random split of a flat image directory
-
-    Args:
-        config: Full Config object
-
-    Returns:
-        train_loader, val_loader
+    Supports:
+      1. Single dataset (config.data)
+      2. Multi-dataset (config.datasets list)
+      3. Subdirectory split (training/validation subdirs)
+      4. Explicit split files
+      5. Cityscapes mode
     """
-    from torch.utils.data import DataLoader, random_split
+    from torch.utils.data import DataLoader
 
-    class_mapping = config.data.class_mapping
+    # ── Multi-dataset mode ──
+    if config.datasets:
+        train_datasets = []
+        val_datasets = []
 
-    # Determine file lists
-    train_files = None
-    val_files = None
+        for ds_cfg in config.datasets:
+            aug = ds_cfg.augmentation if ds_cfg.augmentation is not None else config.data.augmentation
 
-    if config.data.train_split and os.path.exists(config.data.train_split):
+            train_ds = SkyWaterDataset(
+                image_dir=ds_cfg.image_dir,
+                mask_dir=ds_cfg.mask_dir,
+                image_size=tuple(ds_cfg.image_size or config.data.image_size),
+                num_classes=ds_cfg.num_classes or config.data.num_classes,
+                augmentation=aug,
+                config=config.data if aug else None,
+                class_mapping=ds_cfg.class_mapping,
+                cityscapes=ds_cfg.cityscapes,
+                split="train",
+            )
+            val_ds = SkyWaterDataset(
+                image_dir=ds_cfg.image_dir,
+                mask_dir=ds_cfg.mask_dir,
+                image_size=tuple(ds_cfg.image_size or config.data.image_size),
+                num_classes=ds_cfg.num_classes or config.data.num_classes,
+                augmentation=False,
+                config=None,
+                class_mapping=ds_cfg.class_mapping,
+                cityscapes=ds_cfg.cityscapes,
+                split="val",
+            )
+            train_datasets.append(train_ds)
+            val_datasets.append(val_ds)
+
+        train_dataset = MultiDataset(train_datasets, config.mix_weights)
+        val_dataset = MultiDataset(val_datasets, None)  # uniform val sampling
+
+    # ── Single dataset: Mode 1 (explicit split files) ──
+    elif config.data.train_split and os.path.exists(config.data.train_split):
         with open(config.data.train_split, encoding="utf-8") as f:
             train_files = [line.strip() for line in f if line.strip()]
-    if config.data.val_split and os.path.exists(config.data.val_split):
         with open(config.data.val_split, encoding="utf-8") as f:
             val_files = [line.strip() for line in f if line.strip()]
 
-    if train_files is not None and val_files is not None:
-        # Mode 1: Explicit split files
         train_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir,
-            mask_dir=config.data.mask_dir,
+            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
             augmentation=config.data.augmentation,
-            config=config.data,
+            config=config.data if config.data.augmentation else None,
             file_list=train_files,
-            class_mapping=class_mapping,
+            class_mapping=config.data.class_mapping,
+            cityscapes=config.data.cityscapes,
+            split="train",
         )
         val_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir,
-            mask_dir=config.data.mask_dir,
+            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
-            augmentation=False,
-            config=None,
+            augmentation=False, config=None,
             file_list=val_files,
-            class_mapping=class_mapping,
+            class_mapping=config.data.class_mapping,
+            cityscapes=config.data.cityscapes,
+            split="val",
         )
-    elif (Path(config.data.image_dir) / "training").exists() and \
-         (Path(config.data.image_dir) / "validation").exists():
-        # Mode 2: ADE20K-style subdirectory split
-        train_image_dir = str(Path(config.data.image_dir) / "training")
-        val_image_dir = str(Path(config.data.image_dir) / "validation")
-        train_mask_dir = str(Path(config.data.mask_dir) / "training")
-        val_mask_dir = str(Path(config.data.mask_dir) / "validation")
 
+    # ── Single dataset: Mode 2 (subdirectory split) ──
+    elif (Path(config.data.image_dir) / "training").exists():
         train_dataset = SkyWaterDataset(
-            image_dir=train_image_dir,
-            mask_dir=train_mask_dir,
+            image_dir=str(Path(config.data.image_dir) / "training"),
+            mask_dir=str(Path(config.data.mask_dir) / "training"),
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
             augmentation=config.data.augmentation,
-            config=config.data,
-            class_mapping=class_mapping,
+            config=config.data if config.data.augmentation else None,
+            class_mapping=config.data.class_mapping,
+            cityscapes=config.data.cityscapes,
+            split="train",
         )
         val_dataset = SkyWaterDataset(
-            image_dir=val_image_dir,
-            mask_dir=val_mask_dir,
+            image_dir=str(Path(config.data.image_dir) / "validation"),
+            mask_dir=str(Path(config.data.mask_dir) / "validation"),
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
-            augmentation=False,
-            config=None,
-            class_mapping=class_mapping,
-        )
-    else:
-        # Mode 3: Random split of flat directory
-        full_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir,
-            mask_dir=config.data.mask_dir,
-            image_size=tuple(config.data.image_size),
-            num_classes=config.data.num_classes,
-            augmentation=False,  # Base dataset, train gets its own
-            config=None,
-            file_list=None,
-            class_mapping=class_mapping,
+            augmentation=False, config=None,
+            class_mapping=config.data.class_mapping,
+            cityscapes=config.data.cityscapes,
+            split="val",
         )
 
+    # ── Single dataset: Mode 3 (random split) ──
+    else:
+        full_dataset = SkyWaterDataset(
+            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
+            image_size=tuple(config.data.image_size),
+            num_classes=config.data.num_classes,
+            augmentation=False, config=None,
+            class_mapping=config.data.class_mapping,
+            cityscapes=config.data.cityscapes,
+            split="train",
+        )
+        from torch.utils.data import random_split
         n_val = max(1, int(len(full_dataset) * config.data.val_ratio))
         n_train = len(full_dataset) - n_val
-
         train_base, val_dataset = random_split(
             full_dataset, [n_train, n_val],
             generator=torch.Generator().manual_seed(config.seed),
         )
+        train_dataset = _AugmentedWrapper(train_base, full_dataset, config.data)
 
-        # Wrap train split with augmentation
-        train_dataset = _AugmentedWrapper(
-            dataset=train_base,
-            base_dataset=full_dataset,
-            config=config.data,
-        )
-
-    # MPS does not support pin_memory
-    import torch
+    # ── DataLoaders ──
     pin_memory = config.train.pin_memory and not torch.backends.mps.is_available()
 
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.train.batch_size,
-        shuffle=True,
-        num_workers=config.train.num_workers,
-        pin_memory=pin_memory,
-        drop_last=True,
+        train_dataset, batch_size=config.train.batch_size,
+        shuffle=True, num_workers=config.train.num_workers,
+        pin_memory=pin_memory, drop_last=True,
     )
-
     val_loader = DataLoader(
-        val_dataset,
-        batch_size=config.train.batch_size,
-        shuffle=False,
-        num_workers=config.train.num_workers,
-        pin_memory=pin_memory,
-        drop_last=False,
+        val_dataset, batch_size=config.train.batch_size,
+        shuffle=False, num_workers=config.train.num_workers,
+        pin_memory=pin_memory, drop_last=False,
     )
 
     return train_loader, val_loader
 
 
-class _AugmentedWrapper(Dataset):
-    """Wraps a subset of a dataset with augmentation enabled."""
+# ── Internal helpers ──
 
-    def __init__(self, dataset, base_dataset, config: DataConfig):
+class _AugmentedWrapper(Dataset):
+    """Wraps a random_split subset with augmentation enabled."""
+
+    def __init__(self, dataset, base_dataset, config: "DataConfig"):
         self.dataset = dataset
         self.base = base_dataset
-        self.aug = base_dataset.augmentation
-        self.transform = base_dataset._build_transforms(config) if config.augmentation else None
-
-        # Need access to files for proper loading
         self.image_size = base_dataset.image_size
         self.num_classes = base_dataset.num_classes
+        self.transform = base_dataset._build_transforms(config) if config.augmentation else None
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        # Get the item WITHOUT augmentation from base first
-        # This is a simplified wrapper; in practice, use the full dataset
-        # with augmentation flag per-split
-
-        # For proper random_split support, we need the underlying indices
         indices = self.dataset.indices
         original_idx = indices[idx]
-
-        # Manually load with augmentation
         image_name = self.base.images[original_idx]
         stem = Path(image_name).stem
 
         image_path = self.base.image_dir / image_name
-        image = cv2.imread(str(image_path))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = _load_image_robust(str(image_path))
+        if image is None:
+            h, w = self.image_size
+            return {"image": torch.zeros((3, h, w), dtype=torch.float32),
+                    "mask": torch.zeros((h, w), dtype=torch.long),
+                    "name": Path(image_path).name}
 
-        mask = self.base._load_mask(stem)
-
-        # Apply class remapping if configured
+        mask = self.base._load_mask(original_idx)
         if self.base.class_mapping is not None:
-            mask = self.base._remap_mask(mask)
+            remapped = np.zeros_like(mask, dtype=np.uint8)
+            for raw_val, target_val in self.base.class_mapping.items():
+                remapped[mask == raw_val] = target_val
+            mask = remapped
 
-        # Resize to target size
         h, w = self.image_size
         image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
         mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -452,5 +511,4 @@ class _AugmentedWrapper(Dataset):
         if isinstance(mask, np.ndarray):
             mask = torch.from_numpy(mask).long()
         mask = torch.clamp(mask, 0, self.num_classes - 1)
-
         return {"image": image, "mask": mask, "name": image_name}

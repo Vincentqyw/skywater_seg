@@ -35,6 +35,9 @@ class DataConfig:
     # None means no remapping (masks already use 0, 1, 2, ... directly)
     class_mapping: Optional[Dict[int, int]] = None
 
+    # Cityscapes mode: auto-detect city subdirectory layout
+    cityscapes: bool = False
+
     # Augmentation
     augmentation: bool = True
     # Color
@@ -123,12 +126,31 @@ class TrainConfig:
 
 
 @dataclass
+class DatasetConfig:
+    """Configuration for a single dataset source (used in multi-dataset mode)."""
+
+    name: str = ""                           # e.g. "ade20k", "cityscapes"
+    image_dir: str = ""
+    mask_dir: str = ""
+    image_size: Optional[Tuple[int, int]] = None  # override, None = use Config.data.image_size
+    num_classes: Optional[int] = None              # override, None = use Config.data.num_classes
+    class_mapping: Optional[Dict[int, int]] = None
+    augmentation: Optional[bool] = None            # None = use Config.data.augmentation
+    cityscapes: bool = False                       # Use Cityscapes directory layout
+    split: str = "train"                           # "train" or "val"
+
+
+@dataclass
 class Config:
     """Master configuration."""
 
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+
+    # Multi-dataset mode: list of dataset sources (overrides data.image_dir etc.)
+    datasets: List[DatasetConfig] = field(default_factory=list)
+    mix_weights: Optional[List[float]] = None  # per-dataset sampling weights (None = uniform)
 
     # Experiment
     experiment_name: str = "skywater-seg"
@@ -182,6 +204,17 @@ class Config:
                 k: v for k, v in data["train"].items()
                 if k in TrainConfig.__dataclass_fields__
             })
+
+        # Parse multi-dataset entries
+        if "datasets" in data:
+            config.datasets = []
+            for ds_data in data["datasets"]:
+                config.datasets.append(DatasetConfig(**{
+                    k: v for k, v in ds_data.items()
+                    if k in DatasetConfig.__dataclass_fields__
+                }))
+        if "mix_weights" in data:
+            config.mix_weights = data["mix_weights"]
 
         # Top-level fields
         for key in ["experiment_name", "output_dir", "seed", "device"]:

@@ -11,6 +11,7 @@ Usage: python train.py --config configs/ade20k_person.yaml
 import os
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -23,6 +24,9 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+
+# Suppress spurious LR scheduler warning (we call scheduler after optimizer)
+warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimizer.step.*")
 
 from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
@@ -185,6 +189,9 @@ class Trainer:
 
             # ---- Validate ----
             if (epoch + 1) % cfg.val_every == 0:
+                # Clear CUDA cache to reduce fragmentation (critical on Windows/limited RAM)
+                if self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
                 val_metrics = self._validate(epoch, log_images=True)
 
                 current_iou = val_metrics["miou"]
@@ -193,6 +200,13 @@ class Trainer:
                     self.best_val_iou = current_iou
                     self.best_epoch = epoch
                     self.patience_counter = 0
+                    best_path = self.output_dir / "best_model.pth"
+                    save_checkpoint(
+                        self.model, self.optimizer, self.scheduler,
+                        epoch + 1, {"miou": self.best_val_iou},
+                        str(best_path), is_best=True,
+                    )
+                    logger.info(f"Best model saved: {best_path} (mIoU={self.best_val_iou:.4f})")
                 else:
                     self.patience_counter += 1
 
@@ -228,14 +242,6 @@ class Trainer:
                     str(ckpt_path),
                 )
                 logger.info(f"Checkpoint saved: {ckpt_path}")
-                if is_best:
-                    best_path = self.output_dir / "best_model.pth"
-                    save_checkpoint(
-                        self.model, self.optimizer, self.scheduler,
-                        epoch + 1, {"miou": self.best_val_iou},
-                        str(best_path), is_best=True,
-                    )
-                    logger.info(f"Best model saved: {best_path} (mIoU={self.best_val_iou:.4f})")
 
         # ---- Done ----
         logger.info("=" * 60)
@@ -306,8 +312,8 @@ class Trainer:
 
             total_loss += loss.item() * cfg.gradient_accumulation
 
-            # Sample metrics
-            if batch_idx % max(1, num_batches // 5) == 0:
+            # Sample metrics (every 50 batches for representative estimate)
+            if batch_idx % 50 == 0:
                 with torch.no_grad():
                     preds = torch.argmax(logits, dim=1)
                     train_preds.append(preds.cpu())
@@ -428,18 +434,18 @@ class Trainer:
 
     def _log_predictions(self, epoch: int, images: torch.Tensor,
                          masks: torch.Tensor, preds: torch.Tensor, max_samples: int = 8):
-        """Log GT vs Prediction overlays to TensorBoard."""
+        """Log GT vs Prediction overlays to TensorBoard with pseudo-color masks."""
         import cv2
 
         n = min(images.size(0), max_samples)
-        SKY_RGB = np.array([255, 140, 0])
-        WATER_RGB = np.array([0, 200, 255])
-        PERSON_RGB = np.array([255, 60, 60])
-        ERR_MISS_RGB = np.array([255, 0, 0])
-        ERR_FALSE_RGB = np.array([255, 165, 0])
-        WHITE_RGB = np.array([255, 255, 255])
-        ALPHA = 0.45
-        font = cv2.FONT_HERSHEY_SIMPLEX
+        # Pseudo-color palette: BG=black, Sky=orange, Water=cyan, Person=magenta
+        PALETTE = np.array([
+            [0, 0, 0],       # 0: background
+            [255, 140, 0],   # 1: sky (orange)
+            [0, 200, 255],   # 2: water (cyan)
+            [230, 50, 230],  # 3: person (magenta)
+        ], dtype=np.uint8)
+        FONT = cv2.FONT_HERSHEY_SIMPLEX
 
         for i in range(n):
             img = tensor_to_image(images[i].cpu())
@@ -448,49 +454,79 @@ class Trainer:
             h, w = gt.shape
             img = cv2.resize(img, (w, h))
 
-            gt_ov = img.copy().astype(np.float32)
-            gt_ov[gt == 1] = gt_ov[gt == 1] * (1 - ALPHA) + SKY_RGB * ALPHA
-            gt_ov[gt == 2] = gt_ov[gt == 2] * (1 - ALPHA) + WATER_RGB * ALPHA
-            gt_ov[gt == 3] = gt_ov[gt == 3] * (1 - ALPHA) + PERSON_RGB * ALPHA
-            gt_ov = gt_ov.clip(0, 255).astype(np.uint8)
+            def _pseudo(mask):
+                """Convert class-index mask to RGB pseudo-color image."""
+                return PALETTE[mask.clip(0, 3)]
 
-            pd_ov = img.copy().astype(np.float32)
-            pd_ov[pd == 1] = pd_ov[pd == 1] * (1 - ALPHA) + SKY_RGB * ALPHA
-            pd_ov[pd == 2] = pd_ov[pd == 2] * (1 - ALPHA) + WATER_RGB * ALPHA
-            pd_ov[pd == 3] = pd_ov[pd == 3] * (1 - ALPHA) + PERSON_RGB * ALPHA
-            pd_ov = pd_ov.clip(0, 255).astype(np.uint8)
+            def _overlay(bg, mask, alpha=0.45):
+                """Alpha-blend pseudo-color mask over background."""
+                color = _pseudo(mask).astype(np.float32)
+                bg_f = bg.astype(np.float32)
+                return (bg_f * (1 - alpha) + color * alpha).clip(0, 255).astype(np.uint8)
 
-            def _label(im, text):
-                cv2.putText(im, text, (4, 14), font, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            def _binary_color(mask, target_class, on_color, off_color=None):
+                """Return RGB image: target_class pixels in on_color, rest in off_color (or black)."""
+                h, w = mask.shape
+                if off_color is None:
+                    off_color = np.array([40, 40, 40], dtype=np.uint8)
+                out = np.full((h, w, 3), off_color, dtype=np.uint8)
+                out[mask == target_class] = on_color
+                return out
+
+            def _label(im, text, color=(255, 255, 255)):
+                cv2.putText(im, text, (4, 14), FONT, 0.4, color, 1, cv2.LINE_AA)
                 return im
 
+            # Row 1: Input | GT overlay | Pred overlay
+            gt_ov = _overlay(img, gt)
+            pd_ov = _overlay(img, pd)
             _label(img, "Input")
-            cv2.putText(gt_ov, "GT", (4, 14), font, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-            cv2.putText(pd_ov, "Prediction", (4, 14), font, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(gt_ov, "GT", (4, 14), FONT, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(pd_ov, "Pred", (4, 14), FONT, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
-            sky_gt = np.zeros((h, w, 3), dtype=np.uint8); sky_gt[gt == 1] = WHITE_RGB
-            sky_pd = np.zeros((h, w, 3), dtype=np.uint8); sky_pd[pd == 1] = WHITE_RGB
+            # Row 2: Sky (GT, Pred, Error map) — bright on dark gray bg
+            SKY = np.array([255, 140, 0])
+            RED = np.array([255, 60, 60])
+            YLW = np.array([255, 220, 50])
+            DIM = np.array([30, 30, 30])
+            sky_gt = _binary_color(gt, 1, SKY, DIM)
+            sky_pd = _binary_color(pd, 1, SKY, DIM)
             sky_err = np.zeros((h, w, 3), dtype=np.uint8)
-            sky_err[(gt == 1) & (pd != 1)] = ERR_MISS_RGB
-            sky_err[(gt != 1) & (pd == 1)] = ERR_FALSE_RGB
+            sky_err[(gt == 1) & (pd != 1)] = RED
+            sky_err[(gt != 1) & (pd == 1)] = YLW
 
-            water_gt = np.zeros((h, w, 3), dtype=np.uint8); water_gt[gt == 2] = WHITE_RGB
-            water_pd = np.zeros((h, w, 3), dtype=np.uint8); water_pd[pd == 2] = WHITE_RGB
+            # Row 3: Water
+            WTR = np.array([0, 200, 255])
+            water_gt = _binary_color(gt, 2, WTR, DIM)
+            water_pd = _binary_color(pd, 2, WTR, DIM)
             water_err = np.zeros((h, w, 3), dtype=np.uint8)
-            water_err[(gt == 2) & (pd != 2)] = ERR_MISS_RGB
-            water_err[(gt != 2) & (pd == 2)] = ERR_FALSE_RGB
+            water_err[(gt == 2) & (pd != 2)] = RED
+            water_err[(gt != 2) & (pd == 2)] = YLW
 
             row1 = np.hstack([img, gt_ov, pd_ov])
-            row2 = np.hstack([_label(sky_gt, "Sky GT"), _label(sky_pd, "Sky Pred"), _label(sky_err, "Sky Err(R=miss,O=false)")])
-            row3 = np.hstack([_label(water_gt, "Water GT"), _label(water_pd, "Water Pred"), _label(water_err, "Water Err(R=miss,O=false)")])
+            row2 = np.hstack([
+                _label(sky_gt, "Sky GT"),
+                _label(sky_pd, "Sky Pred"),
+                _label(sky_err, "Sky Err (red=miss, yellow=false)"),
+            ])
+            row3 = np.hstack([
+                _label(water_gt, "Water GT"),
+                _label(water_pd, "Water Pred"),
+                _label(water_err, "Water Err (red=miss, yellow=false)"),
+            ])
 
             if self.config.model.classes >= 4:
-                person_gt = np.zeros((h, w, 3), dtype=np.uint8); person_gt[gt == 3] = WHITE_RGB
-                person_pd = np.zeros((h, w, 3), dtype=np.uint8); person_pd[pd == 3] = WHITE_RGB
+                PRS = np.array([230, 50, 230])
+                person_gt = _binary_color(gt, 3, PRS, DIM)
+                person_pd = _binary_color(pd, 3, PRS, DIM)
                 person_err = np.zeros((h, w, 3), dtype=np.uint8)
-                person_err[(gt == 3) & (pd != 3)] = ERR_MISS_RGB
-                person_err[(gt != 3) & (pd == 3)] = ERR_FALSE_RGB
-                row4 = np.hstack([_label(person_gt, "Person GT"), _label(person_pd, "Person Pred"), _label(person_err, "Person Err(R=miss,O=false)")])
+                person_err[(gt == 3) & (pd != 3)] = RED
+                person_err[(gt != 3) & (pd == 3)] = YLW
+                row4 = np.hstack([
+                    _label(person_gt, "Person GT"),
+                    _label(person_pd, "Person Pred"),
+                    _label(person_err, "Person Err (red=miss, yellow=false)"),
+                ])
                 grid = np.vstack([row1, row2, row3, row4])
             else:
                 grid = np.vstack([row1, row2, row3])

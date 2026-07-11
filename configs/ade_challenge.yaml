@@ -9,7 +9,7 @@
 #
 # Best cost-performance model: DeepLabV3+ MobileNetV3-Large (~5M params)
 
-experiment_name: skywater-ade-gpu384
+experiment_name: skywater-ade-256
 output_dir: ./checkpoints
 seed: 42
 device: cuda
@@ -21,7 +21,7 @@ data:
   train_split: ""                  # Auto-detects training/ subdirectory
   val_split: ""                    # Auto-detects validation/ subdirectory
   val_ratio: 0.15                  # Only used for random split fallback
-  image_size: [384, 384]           # Smaller for GPU memory stability
+  image_size: [256, 256]           # Minimal: system RAM constraint
   num_classes: 4                   # 0: bg, 1: sky, 2: water, 3: person
   ignore_index: 255
 
@@ -68,8 +68,8 @@ model:
 # ---- Training ----
 train:
   # Optimization
-  batch_size: 8                                      # GPU 384: conservative
-  epochs: 75                                         # Back to full training
+  batch_size: 4                                      # Minimal: fits in limited RAM
+  epochs: 50                                         # Faster completion
   learning_rate: 0.0001                              # 1e-4, standard for AdamW + cosine
   weight_decay: 0.0001
   optimizer: adamw
