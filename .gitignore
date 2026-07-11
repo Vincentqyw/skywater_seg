@@ -1,0 +1,57 @@
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Checkpoints and models
+checkpoints/
+*.pth
+*.onnx
+*.trt
+*.engine
+*.pt
+*.mlpackage/
+*.mlmodel/
+
+# Data (raw images/masks — keep split files)
+data/images/
+data/masks/
+data/ade20k_skywater/
+data/*.png
+data/*.jpg
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logging
+*.log
+runs/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Claude
+.claude/
+
+# Output / results
+output/
+results/
+
+# Third-party code
+thirdparty/
+
+# HuggingFace cache
+E:\huggingface\

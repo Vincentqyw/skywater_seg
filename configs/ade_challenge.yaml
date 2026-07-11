@@ -1,0 +1,110 @@
+# ============================================================
+# Sky-Water-Person Segmentation — ADEChallengeData2016 Config
+# ============================================================
+# Trains directly on ADEChallengeData2016 (ILSVRC 2016 scene parsing).
+# No pre-extraction needed — class remapping handled by the dataset.
+#
+# Dataset: 20,210 train + 2,000 val images
+# Classes:  0=background, 1=sky, 2=water, 3=person
+#
+# Best cost-performance model: DeepLabV3+ MobileNetV3-Large (~5M params)
+
+experiment_name: skywater-ade-gpu384
+output_dir: ./checkpoints
+seed: 42
+device: cuda
+
+# ---- Dataset ----
+data:
+  image_dir: E:\datasets\ADEChallengeData2016\images
+  mask_dir: E:\datasets\ADEChallengeData2016\annotations
+  train_split: ""                  # Auto-detects training/ subdirectory
+  val_split: ""                    # Auto-detects validation/ subdirectory
+  val_ratio: 0.15                  # Only used for random split fallback
+  image_size: [384, 384]           # Smaller for GPU memory stability
+  num_classes: 4                   # 0: bg, 1: sky, 2: water, 3: person
+  ignore_index: 255
+
+  # Remap ADE20K 150-class labels → our 4-class labels
+  # ADE20K: 3=sky, 13=person, 22=water, 27=sea, 61=river,
+  #         110=swimming pool, 114=waterfall, 129=lake
+  # Unmapped pixels → 0 (background)
+  class_mapping:
+    3: 1     # sky
+    13: 3    # person
+    22: 2    # water
+    27: 2    # sea → water
+    61: 2    # river → water
+    110: 2   # swimming pool → water
+    114: 2   # waterfall → water
+    129: 2   # lake → water
+
+  # Augmentation (only applied to training set)
+  augmentation: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.05
+  horizontal_flip: 0.5
+  vertical_flip: 0.0               # Don't flip vertically — sky is on top
+  rotation: 10.0                   # Max rotation in degrees
+  scale: [0.8, 1.2]                # Random resize crop scale range
+
+  # Normalization (ImageNet stats)
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+# ---- Model Architecture ----
+model:
+  name: deeplabv3plus                               # Best cost-performance arch
+  encoder_name: timm-mobilenetv3_large_100           # ~5M params, ImageNet pretrained
+  encoder_weights: imagenet
+  in_channels: 3
+  classes: 4                                         # bg, sky, water, person
+  encoder_output_stride: 16
+  decoder_channels: 256
+  decoder_atrous_rates: [12, 24, 36]
+
+# ---- Training ----
+train:
+  # Optimization
+  batch_size: 8                                      # GPU 384: conservative
+  epochs: 75                                         # Back to full training
+  learning_rate: 0.0001                              # 1e-4, standard for AdamW + cosine
+  weight_decay: 0.0001
+  optimizer: adamw
+  momentum: 0.9                                      # Only used by SGD
+  betas: [0.9, 0.999]                                # Adam/AdamW betas
+
+  # LR Schedule
+  scheduler: cosine                                  # Smooth decay, works well with AdamW
+  lr_min: 0.000001                                   # Minimum LR (1e-6)
+  lr_warmup_epochs: 5
+  poly_power: 0.9                                    # For poly scheduler
+
+  # Loss — class weights help with rare water (0.74%) and person (1.6%) classes
+  loss: dice_ce
+  ce_weight: 0.5
+  dice_weight: 0.5
+  class_weights: [0.25, 1.0, 2.0, 2.0]              # bg down-weighted, water+person up-weighted
+
+  # Training
+  mixed_precision: true                              # AMP for GPU memory savings
+  gradient_accumulation: 1                           # Direct step, no accumulation needed
+  grad_clip: 1.0                                     # Max gradient norm
+  num_workers: 0                                     # Disabled: Windows shared-memory limit (error 1455)
+  pin_memory: false                                  # Disabled: MPS incompatible + Windows shared-mem pressure
+
+  # Validation
+  val_every: 1                                       # Validate every epoch
+  save_every: 5                                      # Save checkpoint every N epochs
+  early_stopping_patience: 25                        # Stop if no mIoU improvement for N epochs
+
+  # Logging
+  log_every: 50                                      # Log every N batches (20K images → fewer logs)
+  tensorboard: false                                 # Disabled: async writer instability on Windows
+  wandb: false
+  wandb_project: skywater-seg
+
+  # Resume
+  resume_from: ""                                    # Path to checkpoint for resuming

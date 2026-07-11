@@ -1,0 +1,42 @@
+{
+  "sky": {
+    "prompts": [
+      "sky",
+      "cloudy sky",
+      "clear sky",
+      "overcast sky",
+      "sky region",
+      "cloud"
+    ],
+    "mask_value": 1,
+    "color": [255, 180, 0]
+  },
+  "water": {
+    "prompts": [
+      "water",
+      "lake",
+      "river",
+      "ocean",
+      "sea",
+      "pond",
+      "stream",
+      "water surface",
+      "canal",
+      "reservoir"
+    ],
+    "mask_value": 2,
+    "color": [0, 180, 255]
+  },
+  "vegetation": {
+    "prompts": [
+      "tree",
+      "vegetation",
+      "forest",
+      "grass",
+      "bush",
+      "foliage"
+    ],
+    "mask_value": 3,
+    "color": [0, 255, 0]
+  }
+}
