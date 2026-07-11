@@ -1,207 +1,299 @@
-# 🌊 Sky-Water Segmentation Pipeline
+# 🌊 Sky-Water-Person Segmentation
 
-自动标注 + 轻量模型训练 + 部署的完整 pipeline。**uv 管理环境，针对 MacBook (Apple Silicon) 深度优化。**
+**Auto-annotation → training → deployment.** A complete pipeline that generates segmentation masks with Grounding DINO + SAM, trains a lightweight model, and deploys via ONNX / CoreML. Built with `uv`, optimized for NVIDIA GPUs and Apple Silicon.
 
-目标：mask 掉图像中的天空和水面区域，消除它们对 SfM 与图像匹配的干扰。
-
----
-
-## 整体架构
-
-```
-┌─────────────────────────────────┐
-│  Phase 1: 自动标注               │
-│  Grounding DINO + SAM (MPS)     │
-│  → 生成 sky/water masks         │
-└─────────────┬───────────────────┘
-              │ masks (PNG)
-              ▼
-┌─────────────────────────────────┐
-│  Phase 2: 小模型训练             │
-│  DeepLabV3+ MobileNetV3 (MPS)   │
-│  → ~5M params                     │
-└─────────────┬───────────────────┘
-              │ checkpoint (.pth)
-              ▼
-┌─────────────────────────────────┐
-│  Phase 3: 部署                  │
-│  ONNX Runtime / CoreML (ANE)   │
-│  → <5ms MacBook, ~10MB          │
-└─────────────────────────────────┘
-```
+> **Goal:** Mask out sky, water, and person regions to eliminate interference in SfM and image matching pipelines.
 
 ---
 
-## 🚀 快速开始 (MacBook)
+## Architecture
 
-### 环境安装 (uv)
+```
+Phase 1: Auto-Annotation           Phase 2: Training                Phase 3: Deployment
+┌─────────────────────────┐       ┌─────────────────────────┐      ┌──────────────────────┐
+│ Grounding DINO + SAM    │  →    │ DeepLabV3+ / ConvNeXt   │  →   │ ONNX / CoreML (ANE)  │
+│ text prompts → boxes    │       │ ~5M–30M params          │      │ <5 ms inference       │
+│ → pixel masks           │       │ MPS / CUDA / AMP        │      │ ~10 MB model          │
+└─────────────────────────┘       └─────────────────────────┘      └──────────────────────┘
+```
+
+**Classes:** 0 = background, 1 = sky, 2 = water, 3 = person
+
+---
+
+## Quick Start
+
+### Install
 
 ```bash
-# 安装 uv (如已安装跳过)
+# Install uv (skip if already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 一键安装所有依赖
+# Clone & install all dependencies
 cd skywater
 uv sync
 
-# 验证
-uv run python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
+# Verify
+uv run python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, MPS: {torch.backends.mps.is_available()}')"
 ```
 
-### 一键运行完整 Pipeline
+### Run the Full Pipeline
 
 ```bash
-# MacBook: 自动检测 Apple Silicon，使用最优配置
+# Auto-detect hardware & use optimal settings
 uv run python run_pipeline.py --image-dir data/images
 
-# 分步运行
-uv run python run_pipeline.py --image-dir data/images --annotate-only   # 只标注
-uv run python run_pipeline.py --image-dir data/images --train-only      # 只训练
-uv run python run_pipeline.py --image-dir data/images --export-only \   # 只导出
-    --checkpoint checkpoints/skywater-seg/best_model.pth
+# Individual phases
+uv run python run_pipeline.py --image-dir data/images --annotate-only
+uv run python run_pipeline.py --image-dir data/images --train-only
+uv run python run_pipeline.py --export-only --checkpoint checkpoints/skywater-seg/best_model.pth
 ```
 
-### 推理
+### Inference
 
 ```bash
-# PyTorch (MPS 加速)
+# PyTorch
 uv run python inference.py --checkpoint checkpoints/skywater-seg/best_model.pth -i test.jpg
 
-# ONNX Runtime (跨平台)
+# ONNX Runtime (no PyTorch needed)
 uv run python inference.py --onnx checkpoints/skywater-seg/skywater_seg.onnx -i test.jpg
 ```
 
 ---
 
-## 📋 详细用法
+## Phase 1 — Auto-Annotation
 
-### Phase 1: 自动标注
+Uses Grounding DINO to detect regions from text prompts, then SAM to produce pixel-perfect masks.
 
 ```bash
-# MacBook 优化（自动使用 tiny + vit_b，更快）
-uv run python scripts/auto_annotate.py \
-    -i data/images \
-    -o data/masks
+# MacBook / low-memory: tiny + vit_b (fast, ~3–5s per image)
+uv run python scripts/auto_annotate.py -i data/images -o data/masks
 
-# 如果追求标注精度（需要更多内存和时间）
-uv run python scripts/auto_annotate.py \
-    -i data/images -o data/masks \
+# GPU / high-quality: base + vit_l (~8–12s per image)
+uv run python scripts/auto_annotate.py -i data/images -o data/masks \
     --gdino-model base --sam-model vit_l
 
-# 单张图像
+# Single image
 uv run python scripts/auto_annotate.py -i test.jpg -o ./output
 ```
 
-**输出**：
+**Output:**
 ```
 data/masks/
-├── image001_mask.png      # 0=背景, 1=天空, 2=水面
-├── image001_vis.jpg       # 可视化叠加
-├── annotation_summary.json
+├── IMG_0001_mask.png          # 0=bg, 1=sky, 2=water, 3=person
+├── IMG_0001_vis.jpg           # Visualization overlay
+├── annotation_summary.json    # Per-image stats
 └── ...
 ```
 
-### Phase 2: 训练
+---
+
+## Phase 2 — Training
+
+### Datasets
+
+The pipeline supports multiple dataset sources:
+
+| Dataset | Format | Classes | Notes |
+|---------|--------|---------|-------|
+| Custom (flat dir) | `images/*.jpg` + `masks/*_mask.png` | Any | Default mode |
+| ADE20K (ADEChallengeData2016) | `images/` + `annotations/` with class remapping | sky, water, person | 150→4 class mapping |
+| Cityscapes | `leftImg8bit/` + `gtFine/` subdirectories | sky, water, person | Auto city-split detection |
+| Multi-dataset | Mix any of the above with sampling weights | 4 | Combined `MultiDataset` |
+
+### Config Presets
+
+| Config | Dataset | Model | Classes | Use Case |
+|--------|---------|-------|---------|----------|
+| `default.yaml` | Custom flat dir | MobileNetV3-Large (~5M) | 3 | Quick start, custom data |
+| `ade_challenge.yaml` | ADE20K full | MobileNetV3-Large (~5M) | 4 | Cost-effective ADE20K |
+| `ade20k_person.yaml` | ADE20K filtered | MobileNetV3-Large (~5M) | 4 | Pre-filtered sky/water/person |
+| `convnext_dinov3.yaml` | ADE20K filtered | ConvNeXt-Tiny + DINOv3 (~29M) | 4 | High quality, distilled weights |
+| `multi_dataset.yaml` | ADE20K + Cityscapes | ConvNeXt-Tiny + DINOv3 (~29M) | 4 | Best generalization |
+
+### Running Training
 
 ```bash
-# MacBook 优化训练
+# Basic training on custom data
 uv run python train.py --config configs/default.yaml \
     --data.image_dir data/images \
-    --data.mask_dir data/masks \
-    --train.epochs 100 \
-    --train.batch_size 8     # MacBook 内存有限，batch 调小
+    --data.mask_dir data/masks
 
-# 监控
+# ADE20K with filtered split (sky/water/person present)
+uv run python scripts/prepare_ade20k_person.py   # one-time: generate split files
+uv run python train.py --config configs/ade20k_person.yaml
+
+# High-quality model with ConvNeXt + DINOv3
+uv run python train.py --config configs/convnext_dinov3.yaml
+
+# Multi-dataset (ADE20K + Cityscapes)
+uv run python train.py --config configs/multi_dataset.yaml
+
+# CLI overrides (dot notation, auto-typed)
+uv run python train.py --config configs/default.yaml \
+    --train.epochs 100 --train.batch_size 8 --train.learning_rate 0.0001
+
+# Resume from checkpoint
+uv run python train.py --config configs/default.yaml \
+    --train.resume_from checkpoints/skywater-seg/best_model.pth
+
+# Monitor
 uv run tensorboard --logdir checkpoints/skywater-seg/logs
 ```
 
-### Phase 3: 导出 & 部署
+### Model Architecture Options
+
+| Encoder | Params | Weights | Preset |
+|---------|--------|---------|--------|
+| `timm-mobilenetv3_large_100` | ~5M | ImageNet | `lightweight` |
+| `timm-mobilenetv3_small_050` | ~2M | ImageNet | `ultra-lightweight` |
+| `timm-efficientnet-b0` | ~5M | ImageNet | `balanced` |
+| `timm-efficientnet-b3` | ~12M | ImageNet | `accurate` |
+| `convnext-tiny` | ~29M | DINOv3 / ImageNet-22K | `convnext_dinov3` |
+| `convnext-small` | ~50M | DINOv3 / ImageNet-22K | — |
+| `convnext-base` | ~89M | DINOv3 / ImageNet-22K | — |
+
+All SMP-native encoders (ResNet, EfficientNet, MiT, etc.) are also supported.
+
+### Loss Functions
+
+| Loss | Config Key | Description |
+|------|-----------|-------------|
+| CrossEntropy + Dice | `dice_ce` | **Default.** Balanced per-pixel + region overlap |
+| CrossEntropy | `ce` | Per-pixel only |
+| Dice | `dice` | Region overlap only |
+| Focal | `focal` | Focuses on hard examples, handles class imbalance |
+| Jaccard (IoU) | `jaccard` | Direct IoU optimization |
+
+---
+
+## Phase 3 — Export & Deployment
 
 ```bash
-# → ONNX (跨平台)
-uv run python inference.py \
-    --checkpoint checkpoints/skywater-seg/best_model.pth \
+# PyTorch → ONNX (cross-platform)
+uv run python inference.py --checkpoint checkpoints/skywater-seg/best_model.pth \
     --export-onnx skywater_seg.onnx
 
-# → CoreML (MacBook 专属，Apple Neural Engine 加速，最快！)
-uv run python -c "
-from skywater_seg.coreml_export import export_coreml
-export_coreml('checkpoints/skywater-seg/skywater_seg.onnx',
-              'skywater_seg.mlpackage')
-"
+# ONNX → CoreML (macOS only, Apple Neural Engine)
+uv run python inference.py --checkpoint checkpoints/skywater-seg/best_model.pth \
+    --export-coreml skywater_seg.mlpackage
+
+# PyTorch → TorchScript
+uv run python inference.py --checkpoint checkpoints/skywater-seg/best_model.pth \
+    --export-torchscript skywater_seg.pt
+```
+
+### Export Chain
+
+```
+PyTorch (.pth)  →  ONNX (.onnx)  →  CoreML (.mlpackage)  →  Apple Neural Engine
+                →  TorchScript (.pt)
+                →  TensorRT (.trt) via trtexec CLI
 ```
 
 ---
 
-## 🍎 MacBook 性能
+## Performance
 
-| 推理方式 | 速度 (M3 Max) | 说明 |
-|----------|--------------|------|
-| **CoreML (ANE)** | **~3ms** | Apple Neural Engine，最快 |
-| ONNX Runtime (CPU) | ~15ms | 跨平台，无需 GPU |
-| PyTorch MPS | ~12ms | 开发调试用 |
-| PyTorch CPU | ~50ms | 最慢 |
+### Inference Speed
 
-| 标注模型 | MacBook 适用 | 单张耗时 |
-|----------|-------------|---------|
-| GDINO-tiny + SAM vit_b | ✅ 推荐 | ~3-5s |
-| GDINO-base + SAM vit_l | ⚠️ 16GB+ | ~8-12s |
-| GDINO-base + SAM vit_h | ❌ 需要 32GB+ | ~15-20s |
+| Method | Device | Speed | Model Size |
+|--------|--------|-------|------------|
+| **CoreML (ANE)** | Apple Neural Engine | ~3 ms | ~10 MB |
+| ONNX Runtime (CUDA) | NVIDIA GPU | ~5 ms | ~15 MB |
+| PyTorch (CUDA FP16) | NVIDIA GPU | ~8 ms | ~20 MB |
+| PyTorch (MPS) | Apple Silicon GPU | ~12 ms | ~20 MB |
+| ONNX Runtime (CPU) | CPU | ~15 ms | ~15 MB |
+
+### Annotation Speed (per image)
+
+| Models | Hardware | Time |
+|--------|----------|------|
+| GDINO-tiny + SAM vit_b | MPS / 6 GB GPU | ~3–5 s |
+| GDINO-base + SAM vit_l | 16 GB+ GPU | ~8–12 s |
+| GDINO-base + SAM vit_h | 32 GB+ GPU | ~15–20 s |
 
 ---
 
-## 📦 项目结构
+## Project Structure
 
 ```
 skywater/
 ├── scripts/
-│   └── auto_annotate.py          # Grounding DINO + SAM 自动标注
+│   ├── auto_annotate.py              # Grounding DINO + SAM pipeline
+│   ├── extract_ade20k.py             # ADE20K → sky/water masks
+│   └── prepare_ade20k_person.py      # Filter ADE20K for sky/water/person splits
 ├── skywater_seg/
-│   ├── cli.py                     # uv 命令行入口
-│   ├── config.py                  # 配置管理
-│   ├── dataset.py                 # PyTorch Dataset + 增强
-│   ├── model.py                   # 模型工厂 (DeepLabV3+, U-Net, etc.)
-│   ├── losses.py                  # 损失函数 (Dice, Focal, Combined)
-│   ├── trainer.py                 # 训练循环 (AMP, MPS, 断点续训)
-│   ├── inference.py               # PyTorch/ONNX 推理 + 导出
-│   ├── coreml_export.py           # CoreML 导出 + ANE 推理 (MacBook 专属)
-│   └── utils.py                   # 指标, 可视化, checkpoint 管理
+│   ├── config.py                     # Typed config (dataclass + YAML)
+│   ├── dataset.py                    # Dataset + MultiDataset + dataloader factory
+│   ├── model.py                      # Model factory (SMP + ConvNeXt custom)
+│   ├── losses.py                     # Dice, Focal, Jaccard, Combined losses
+│   ├── trainer.py                    # Training loop (AMP, loguru, TensorBoard)
+│   ├── inference.py                  # PyTorch + ONNX Runtime inference & export
+│   ├── coreml_export.py              # CoreML conversion & ANE inference (macOS)
+│   ├── utils.py                      # Metrics, visualization, checkpoint, schedulers
+│   └── cli.py                        # Package console_scripts entry points
 ├── configs/
-│   ├── default.yaml               # 训练配置
-│   └── custom_classes_example.json
-├── pyproject.toml                  # uv 项目配置
-├── run_pipeline.py                 # 端到端 pipeline (MacBook 优化)
-├── train.py                       # 训练入口
-├── inference.py                   # 推理入口
-└── README.md
+│   ├── default.yaml                  # Custom flat-dir dataset, 3-class
+│   ├── ade_challenge.yaml            # ADE20K full, 4-class, 256px
+│   ├── ade20k_person.yaml            # ADE20K filtered split, 4-class
+│   ├── convnext_dinov3.yaml          # ConvNeXt-Tiny + DINOv3, 4-class
+│   ├── multi_dataset.yaml            # ADE20K + Cityscapes mixed training
+│   └── custom_classes_example.json   # Custom class definitions for annotation
+├── train.py                          # Training entry point
+├── inference.py                      # Inference / export entry point
+├── run_pipeline.py                   # End-to-end pipeline orchestrator
+└── pyproject.toml                    # uv project config + dependencies
 ```
 
 ---
 
-## 🔧 环境管理 (uv)
+## Environment Management
 
 ```bash
-uv sync                          # 安装所有依赖
-uv sync --group annotate         # 只装标注依赖
-uv sync --group train            # 只装训练依赖
-uv sync --group deploy           # 只装部署依赖
-uv sync --no-dev                 # 生产环境（不含 dev 依赖）
+uv sync                          # All dependencies
+uv sync --group annotate         # Annotation only (GDINO + SAM)
+uv sync --group train            # Training only (SMP, albumentations, timm)
+uv sync --group deploy           # Export only (ONNX, CoreML)
+uv sync --no-dev                 # Production (no dev deps)
 
-uv add <package>                 # 添加依赖
-uv remove <package>              # 移除依赖
-uv tree                          # 查看依赖树
+uv add <package>                 # Add dependency
+uv remove <package>              # Remove dependency
+uv tree                          # View dependency tree
+```
+
+### Package CLI Entry Points
+
+```bash
+skywater-annotate -i data/images -o data/masks
+skywater-train --config configs/default.yaml
+skywater-infer --checkpoint model.pth --input test.jpg
 ```
 
 ---
 
-## 🔗 关键参考
+## Key Technical Details
 
-- Grounding DINO: https://github.com/IDEA-Research/GroundingDINO
-- SAM: https://github.com/facebookresearch/segment-anything
-- segmentation-models-pytorch: https://github.com/qubvel/segmentation_models.pytorch
-- coremltools: https://github.com/apple/coremltools
-- uv: https://github.com/astral-sh/uv
-- SfM + 天空掩码: UFERN (2025) — YOLOv8 sky masking 减少 21.7% outliers
+- **Normalization:** ImageNet stats (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`)
+- **Input size:** Configurable (default 512×512)
+- **Mask format:** Single-channel PNG, values 0–3, naming: `{stem}_mask.png`
+- **Class remapping:** `class_mapping` dict in config for arbitrary source→target mappings
+- **Multi-dataset:** `MultiDataset` wrapper with weighted random sampling via `mix_weights`
+- **AMP:** Mixed-precision training via `torch.amp` (CUDA only; skipped on MPS/CPU)
+- **Checkpoints:** Full state dicts (model + optimizer + scheduler + epoch + metrics + timestamp)
+- **Logging:** loguru (console + rotating file) + TensorBoard (metrics, IoU, gradients, weights, prediction overlays)
+- **Device:** Auto-fallback cuda → mps → cpu; `pin_memory` disabled on MPS/Windows
+
+---
+
+## References
+
+- [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO) — Open-set object detection
+- [SAM](https://github.com/facebookresearch/segment-anything) — Segment Anything Model
+- [segmentation-models-pytorch](https://github.com/qubvel/segmentation_models.pytorch) — SMP library
+- [DINOv3](https://github.com/facebookresearch/dinov3) — Meta's distilled ConvNeXt weights
+- [coremltools](https://github.com/apple/coremltools) — Apple CoreML conversion
+- [uv](https://github.com/astral-sh/uv) — Python package manager
 
 ---
 

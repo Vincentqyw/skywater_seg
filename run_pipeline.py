@@ -201,12 +201,10 @@ def main():
             run_step(
                 "Phase 3b: CoreML Export (Apple Neural Engine)",
                 [
-                    sys.executable, "-c",
-                    f"""
-import sys; sys.path.insert(0, "{project_root}")
-from skywater_seg.coreml_export import export_coreml
-export_coreml("{onnx_path}", "{coreml_path}", compute_units="all")
-""",
+                    sys.executable,
+                    str(project_root / "inference.py"),
+                    "--checkpoint", checkpoint_path,
+                    "--export-coreml", coreml_path,
                 ],
             )
             print(f"\n🚀 CoreML model for Apple Neural Engine: {coreml_path}")

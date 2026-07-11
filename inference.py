@@ -43,6 +43,10 @@ def main():
                         help="Device: cuda or cpu")
     parser.add_argument("--export-onnx", type=str, default=None,
                         help="Export to ONNX and exit")
+    parser.add_argument("--export-coreml", type=str, default=None,
+                        help="Export ONNX→CoreML .mlpackage and exit (macOS only)")
+    parser.add_argument("--export-torchscript", type=str, default=None,
+                        help="Export to TorchScript .pt and exit")
     parser.add_argument("--no-overlay", action="store_true",
                         help="Skip saving visualization overlay")
     parser.add_argument("--crf", action="store_true",
@@ -69,6 +73,22 @@ def main():
         if args.export_onnx:
             infer.export_onnx(args.export_onnx)
             print("ONNX export complete. Exiting.")
+            return
+
+        # Export CoreML if requested (macOS only)
+        if args.export_coreml:
+            from skywater_seg.coreml_export import export_coreml
+            onnx_path = args.export_onnx or str(Path(args.checkpoint).with_suffix(".onnx"))
+            if not Path(onnx_path).exists():
+                infer.export_onnx(onnx_path)
+            export_coreml(onnx_path, args.export_coreml)
+            print("CoreML export complete. Exiting.")
+            return
+
+        # Export TorchScript if requested
+        if args.export_torchscript:
+            infer.export_torchscript(args.export_torchscript)
+            print("TorchScript export complete. Exiting.")
             return
     else:
         print("Error: Provide --checkpoint or --onnx")
