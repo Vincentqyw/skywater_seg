@@ -25,7 +25,6 @@ from skywater_seg.inference import (
     ONNXRuntimeInference,
     SegmentationInference,
     draw_overlay,
-    run_inference_cli,
 )
 
 

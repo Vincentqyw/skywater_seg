@@ -413,60 +413,6 @@ class ONNXRuntimeInference:
         }
 
 
-# ============================================================
-# CLI inference function
-# ============================================================
-
-def run_inference_cli(
-    checkpoint_path: str,
-    input_path: str,
-    output_dir: str,
-    config_path: Optional[str] = None,
-    device: str = "cuda",
-    save_overlay: bool = True,
-    export_onnx: Optional[str] = None,
-):
-    """CLI entry point for inference."""
-    config = Config.from_yaml(config_path) if config_path else Config()
-
-    infer = SegmentationInference(checkpoint_path, config, device)
-
-    # Optional ONNX export
-    if export_onnx:
-        infer.export_onnx(export_onnx)
-
-    # Process images
-    input_path = Path(input_path)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    if input_path.is_file():
-        images = [str(input_path)]
-    else:
-        extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
-        images = sorted([
-            str(f) for f in input_path.glob("*") if f.suffix.lower() in extensions
-        ])
-
-    logger.info(f"Processing {len(images)} images...")
-
-    for img_path in images:
-        result = infer.predict(img_path)
-
-        stem = Path(img_path).stem
-
-        # Save mask
-        mask_path = output_path / f"{stem}_mask.png"
-        cv2.imwrite(str(mask_path), result["mask"])
-
-        # Save overlay
-        if save_overlay:
-            vis = draw_overlay(img_path, result["mask"])
-            vis_path = output_path / f"{stem}_vis.jpg"
-            cv2.imwrite(str(vis_path), vis)
-
-    logger.info(f"Done! Results saved to {output_dir}")
-
 
 # Mapping from meta keys → (config_section, attribute_name, transform_fn)
 _META_FIELDS = [
