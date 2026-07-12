@@ -19,6 +19,8 @@ Usage:
 import argparse
 from pathlib import Path
 
+from loguru import logger
+
 from skywater_seg.inference import (
     ONNXRuntimeInference,
     SegmentationInference,
@@ -60,7 +62,7 @@ def main():
 
     # ---- Load model ----
     if args.onnx:
-        print(f"Loading ONNX model: {args.onnx}")
+        logger.info(f"Loading ONNX model: {args.onnx}")
         infer = ONNXRuntimeInference(args.onnx)
     elif args.checkpoint:
         from skywater_seg.config import Config
@@ -68,13 +70,13 @@ def main():
             config = Config.from_yaml(args.config)
         else:
             config = None  # auto-detect from checkpoint metadata
-        print(f"Loading checkpoint: {args.checkpoint}")
+        logger.info(f"Loading checkpoint: {args.checkpoint}")
         infer = SegmentationInference(args.checkpoint, config, device=args.device)
 
         # Export ONNX if requested
         if args.export_onnx:
             infer.export_onnx(args.export_onnx)
-            print("ONNX export complete. Exiting.")
+            logger.info("ONNX export complete. Exiting.")
             return
 
         # Export CoreML if requested (macOS only)
@@ -84,16 +86,16 @@ def main():
             if not Path(onnx_path).exists():
                 infer.export_onnx(onnx_path)
             export_coreml(onnx_path, args.export_coreml)
-            print("CoreML export complete. Exiting.")
+            logger.info("CoreML export complete. Exiting.")
             return
 
         # Export TorchScript if requested
         if args.export_torchscript:
             infer.export_torchscript(args.export_torchscript)
-            print("TorchScript export complete. Exiting.")
+            logger.info("TorchScript export complete. Exiting.")
             return
     else:
-        print("Error: Provide --checkpoint or --onnx")
+        logger.error("Provide --checkpoint or --onnx")
         return
 
     # ---- Process images ----
@@ -106,7 +108,7 @@ def main():
             if f.suffix.lower() in extensions
         ])
 
-    print(f"Processing {len(image_paths)} images...")
+    logger.info(f"Processing {len(image_paths)} images...")
 
     for img_path in image_paths:
         stem = Path(img_path).stem
@@ -128,9 +130,9 @@ def main():
             vis_path = output_path / f"{stem}_vis.jpg"
             cv2.imwrite(str(vis_path), vis)
 
-        print(f"  [OK] {stem}: sky={result['sky_mask'].sum():,}px, water={result['water_mask'].sum():,}px")
+        logger.info(f"[OK] {stem}: sky={result['sky_mask'].sum():,}px, water={result['water_mask'].sum():,}px")
 
-    print(f"\nDone! {len(image_paths)} images → {output_path}")
+    logger.info(f"Done! {len(image_paths)} images → {output_path}")
 
 
 if __name__ == "__main__":

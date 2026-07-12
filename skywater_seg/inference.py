@@ -18,9 +18,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from loguru import logger
+
 from skywater_seg.config import Config
 from skywater_seg.model import create_model
-from skywater_seg.utils import get_device
+from skywater_seg.utils import class_colors_bgr, configure_backend, get_device
 
 
 class SegmentationInference:
@@ -39,6 +41,7 @@ class SegmentationInference:
             device: Device for inference
         """
         self.device = get_device(device)
+        configure_backend(self.device)
 
         # Load checkpoint first to extract metadata
         if checkpoint_path.endswith(".pth"):
@@ -49,13 +52,11 @@ class SegmentationInference:
             raise ValueError(f"Unsupported checkpoint format: {checkpoint_path}")
 
         # Auto-detect config from checkpoint metadata, fall back to provided config
+        config = config if config is not None else Config()
         meta = state_dict.get("model_meta") if isinstance(state_dict, dict) else None
         if meta is not None:
             config = _config_from_meta(meta, config)
-            print(f"  [Auto] Config extracted from checkpoint: {meta['encoder_name']}")
-        elif config is None:
-            config = Config()
-            print("  [WARN] No config provided and no metadata in checkpoint — using defaults")
+            logger.info(f"[Auto] Config extracted from checkpoint: {meta['encoder_name']}")
 
         self.config = config
         self.model = create_model(config)
@@ -69,10 +70,9 @@ class SegmentationInference:
         self.num_classes = config.model.classes
         self.image_size = tuple(config.data.image_size)
 
-        print(f"Model loaded on {self.device}")
-        print(f"  Classes: {self.num_classes}")
-        print(f"  Input size: {self.image_size}")
-        print(f"  Input size: {self.image_size}")
+        logger.info(f"Model loaded on {self.device}")
+        logger.info(f"  Classes: {self.num_classes}")
+        logger.info(f"  Input size: {self.image_size}")
 
     @torch.no_grad()
     def predict(
@@ -228,7 +228,7 @@ class SegmentationInference:
             import pydensecrf.densecrf as dcrf
             from pydensecrf.utils import unary_from_softmax
         except ImportError:
-            print("Warning: pydensecrf not installed. Skipping CRF.")
+            logger.warning("pydensecrf not installed. Skipping CRF.")
             return np.argmax(probs, axis=0).astype(np.uint8)
 
         h, w = image_rgb.shape[:2]
@@ -270,7 +270,7 @@ class SegmentationInference:
         Returns:
             Path to exported ONNX model
         """
-        print(f"Exporting to ONNX: {output_path}")
+        logger.info(f"Exporting to ONNX: {output_path}")
 
         h, w = self.image_size
         self.model.eval()
@@ -306,27 +306,22 @@ class SegmentationInference:
                 model_simp, check = onnx_simplify(onnx_model)
                 if check:
                     onnx.save(model_simp, output_path)
-                    print("  [OK] ONNX simplified")
+                    logger.info("[OK] ONNX simplified")
                 else:
-                    print("  [WARN] ONNX simplification check failed, using original")
+                    logger.warning("ONNX simplification check failed, using original")
             except ImportError:
-                print("  ℹ️ onnx-simplifier not installed, skipping simplification")
-                print("    Install with: pip install onnx-simplifier")
+                logger.info("onnx-simplifier not installed, skipping simplification")
 
         # Verify
         import onnx
         onnx_model = onnx.load(output_path)
         onnx.checker.check_model(onnx_model)
-        print(f"  ✅ ONNX model verified: {output_path}")
+        logger.info(f"ONNX model verified: {output_path}")
 
-        # Get file size
         size_mb = os.path.getsize(output_path) / (1024 ** 2)
-        print(f"  📦 Model size: {size_mb:.1f} MB")
-
-        # Print TensorRT conversion hint
-        print(f"\n  💡 To convert to TensorRT engine:")
-        print(f"     trtexec --onnx={output_path} --fp16 \\")
-        print(f"         --saveEngine={Path(output_path).stem}.trt")
+        logger.info(f"  Model size: {size_mb:.1f} MB")
+        logger.info(f"  To convert to TensorRT: trtexec --onnx={output_path} --fp16 "
+                    f"--saveEngine={Path(output_path).stem}.trt")
 
         return output_path
 
@@ -342,7 +337,7 @@ class SegmentationInference:
         traced.save(output_path)
 
         size_mb = os.path.getsize(output_path) / (1024 ** 2)
-        print(f"TorchScript model saved: {output_path} ({size_mb:.1f} MB)")
+        logger.info(f"TorchScript model saved: {output_path} ({size_mb:.1f} MB)")
         return output_path
 
 
@@ -376,9 +371,9 @@ class ONNXRuntimeInference:
         self.input_h = input_shape[2] if isinstance(input_shape[2], int) else 512
         self.input_w = input_shape[3] if isinstance(input_shape[3], int) else 512
 
-        print(f"ONNX Runtime session ready")
-        print(f"  Input: {self.input_name} {input_shape}")
-        print(f"  Providers: {self.session.get_providers()}")
+        logger.info("ONNX Runtime session ready")
+        logger.info(f"  Input: {self.input_name} {input_shape}")
+        logger.info(f"  Providers: {self.session.get_providers()}")
 
     def predict(self, image: Union[str, np.ndarray]) -> Dict[str, np.ndarray]:
         """Run inference on a single image."""
@@ -453,7 +448,7 @@ def run_inference_cli(
             str(f) for f in input_path.glob("*") if f.suffix.lower() in extensions
         ])
 
-    print(f"Processing {len(images)} images...")
+    logger.info(f"Processing {len(images)} images...")
 
     for img_path in images:
         result = infer.predict(img_path)
@@ -470,32 +465,31 @@ def run_inference_cli(
             vis_path = output_path / f"{stem}_vis.jpg"
             cv2.imwrite(str(vis_path), vis)
 
-    print(f"Done! Results saved to {output_dir}")
+    logger.info(f"Done! Results saved to {output_dir}")
+
+
+# Mapping from meta keys → (config_section, attribute_name, transform_fn)
+_META_FIELDS = [
+    ("image_size",       "data",  "image_size",      tuple),
+    ("num_classes",      "data",  "num_classes",     None),
+    ("mean",             "data",  "mean",            None),
+    ("std",              "data",  "std",             None),
+    ("class_mapping",    "data",  "class_mapping",   lambda v: {int(k): x for k, x in v.items()} if v else None),
+    ("model_name",       "model", "name",            None),
+    ("encoder_name",     "model", "encoder_name",    None),
+    ("encoder_weights",  "model", "encoder_weights", None),
+    ("classes",          "model", "classes",         None),
+    ("in_channels",      "model", "in_channels",     None),
+]
 
 
 def _config_from_meta(meta: dict, fallback: Optional[Config] = None) -> Config:
     """Build a Config from checkpoint metadata, merging with optional fallback."""
-    from skywater_seg.config import Config, DataConfig, ModelConfig
-
-    cfg = fallback if fallback else Config()
-
-    if "image_size" in meta:
-        cfg.data.image_size = tuple(meta["image_size"])
-    if "num_classes" in meta:
-        cfg.data.num_classes = meta["num_classes"]
-    if "mean" in meta:
-        cfg.data.mean = meta["mean"]
-    if "std" in meta:
-        cfg.data.std = meta["std"]
-    if "class_mapping" in meta and meta["class_mapping"]:
-        cfg.data.class_mapping = {int(k): v for k, v in meta["class_mapping"].items()}
-
-    cfg.model.name = meta.get("model_name", cfg.model.name)
-    cfg.model.encoder_name = meta.get("encoder_name", cfg.model.encoder_name)
-    cfg.model.encoder_weights = meta.get("encoder_weights", cfg.model.encoder_weights)
-    cfg.model.classes = meta.get("classes", cfg.model.classes)
-    cfg.model.in_channels = meta.get("in_channels", cfg.model.in_channels)
-
+    cfg = fallback if fallback is not None else Config()
+    for meta_key, section, attr, xform in _META_FIELDS:
+        if meta_key in meta and meta[meta_key] is not None:
+            val = meta[meta_key]
+            setattr(getattr(cfg, section), attr, xform(val) if xform else val)
     return cfg
 
 
@@ -506,12 +500,7 @@ def draw_overlay(
 ) -> np.ndarray:
     """Draw segmentation mask overlay with contour outlines.
 
-    Colors (BGR):
-      Sky:    gold/orange  — warm, won't clash with blue sky
-      Water:  turquoise    — distinct teal, visible against sky/sea
-      Person: magenta
-
-    Returns BGR image.
+    Returns BGR image. Colors sourced from utils.CLASS_COLORS_RGB.
     """
     if isinstance(image, str):
         img = cv2.imread(image)
@@ -524,21 +513,20 @@ def draw_overlay(
     if img.shape[:2] != (h, w):
         img = cv2.resize(img, (w, h))
 
-    # Fill overlay
-    COLORS = {
-        1: (80, 190, 255),   # Sky: BGR gold → RGB (255, 190, 80) warm amber
-        2: (180, 160, 60),   # Water: BGR teal → RGB (60, 160, 180) turquoise
-        3: (200, 50, 220),   # Person: BGR magenta
-    }
-
+    colors_bgr = class_colors_bgr()
     overlay = np.zeros_like(img)
-    for cls_id, color in COLORS.items():
+
+    for cls_id, color in colors_bgr.items():
+        if cls_id == 0:
+            continue
         overlay[mask == cls_id] = color
 
     vis = cv2.addWeighted(img, 1 - alpha, overlay, alpha, 0)
 
-    # Draw contour outlines (makes boundaries visible even at low alpha)
-    for cls_id, color in COLORS.items():
+    # Contour outlines (makes boundaries visible even at low alpha)
+    for cls_id, color in colors_bgr.items():
+        if cls_id == 0:
+            continue
         binary = (mask == cls_id).astype(np.uint8) * 255
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(vis, contours, -1, color, 2)

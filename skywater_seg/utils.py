@@ -13,6 +13,23 @@ import torch.nn.functional as F
 
 
 # ============================================================
+# Shared class-color palette (single source of truth)
+# ============================================================
+
+CLASS_COLORS_RGB = {
+    0: (0, 0, 0),         # background: black
+    1: (255, 140, 0),     # sky: orange
+    2: (0, 200, 255),     # water: cyan
+    3: (255, 60, 60),     # person: red
+}
+
+
+def class_colors_bgr() -> dict:
+    """Return the shared palette in BGR order for OpenCV functions."""
+    return {k: (b, g, r) for k, (r, g, b) in CLASS_COLORS_RGB.items()}
+
+
+# ============================================================
 # Metrics
 # ============================================================
 
@@ -151,9 +168,10 @@ def mask_to_color(mask: torch.Tensor) -> np.ndarray:
 
     h, w = mask_np.shape
     vis = np.zeros((h, w, 3), dtype=np.uint8)
-    vis[mask_np == 1] = [255, 140, 0]    # Sky: orange (RGB)
-    vis[mask_np == 2] = [0, 200, 255]    # Water: cyan (RGB)
-    vis[mask_np == 3] = [255, 60, 60]    # Person: red (RGB)
+    for cls_id, color in CLASS_COLORS_RGB.items():
+        if cls_id == 0:
+            continue
+        vis[mask_np == cls_id] = color
     return vis
 
 
@@ -169,6 +187,20 @@ def get_device(device_str: str = "cuda") -> torch.device:
         return torch.device("mps")
     else:
         return torch.device("cpu")
+
+
+def configure_backend(device: torch.device):
+    """Apply PyTorch backend optimizations for the given device.
+
+    CUDA: enables Flash Attention / memory-efficient SDP (PyTorch 2.0+).
+    Called once at process start; idempotent.
+    """
+    if device.type != "cuda":
+        return
+    if not hasattr(torch.backends.cuda, "enable_flash_sdp"):
+        return
+    torch.backends.cuda.enable_flash_sdp(True)
+    torch.backends.cuda.enable_mem_efficient_sdp(True)
 
 
 def to_device(data, device: torch.device):
@@ -226,10 +258,10 @@ def save_checkpoint(
     if model_meta:
         checkpoint["model_meta"] = model_meta
 
-    torch.save(checkpoint, path, _use_new_zipfile_serialization=True)
+    torch.save(checkpoint, path)
     if is_best:
         best_path = str(Path(path).parent / "best_model.pth")
-        torch.save(checkpoint, best_path, _use_new_zipfile_serialization=True)
+        torch.save(checkpoint, best_path)
 
 
 def load_checkpoint(

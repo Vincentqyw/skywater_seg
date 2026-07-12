@@ -16,6 +16,7 @@ DINOv3-distilled ConvNeXt weights (e.g. convnext_tiny.dinov3_lvd1689m).
 from typing import Optional
 
 import torch.nn as nn
+from loguru import logger
 
 from skywater_seg.config import Config
 
@@ -125,16 +126,16 @@ def _create_convnext_model(config: Config, smp) -> nn.Module:
     # Load ConvNeXt with requested weights
     if config.model.encoder_weights == "dinov3":
         timm_tag = f"{timm_name}.dinov3_lvd1689m"
-        print(f"  [ConvNeXt] DINOv3 weights: {timm_tag}")
+        logger.info(f"[ConvNeXt] DINOv3 weights: {timm_tag}")
     elif config.model.encoder_weights == "imagenet":
         timm_tag = f"{timm_name}.fb_in22k_ft_in1k"  # Meta's best ImageNet weights
-        print(f"  [ConvNeXt] ImageNet-22K weights: {timm_tag}")
+        logger.info(f"[ConvNeXt] ImageNet-22K weights: {timm_tag}")
     elif config.model.encoder_weights in (None, "random"):
         timm_tag = timm_name
-        print(f"  [ConvNeXt] Random init: {timm_tag}")
+        logger.info(f"[ConvNeXt] Random init: {timm_tag}")
     else:
         timm_tag = config.model.encoder_weights  # custom checkpoint tag
-        print(f"  [ConvNeXt] Custom weights: {timm_tag}")
+        logger.info(f"[ConvNeXt] Custom weights: {timm_tag}")
 
     timm_encoder = timm.create_model(timm_tag, features_only=True, pretrained=True)
 

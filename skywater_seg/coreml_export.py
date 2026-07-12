@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import numpy as np
+from loguru import logger
 
 
 def export_coreml(
@@ -43,9 +44,9 @@ def export_coreml(
             "Or: pip install coremltools>=7.0"
         )
 
-    print(f"Converting ONNX → CoreML...")
-    print(f"  Input:  {onnx_path}")
-    print(f"  Output: {output_path}")
+    logger.info("Converting ONNX → CoreML...")
+    logger.info(f"  Input:  {onnx_path}")
+    logger.info(f"  Output: {output_path}")
 
     # Load ONNX model
     onnx_model = ct.converters.onnx.load(onnx_path)
@@ -79,9 +80,9 @@ def export_coreml(
         mlmodel.save(output_path)
 
     size_mb = _dir_size(output_path) / (1024 ** 2)
-    print(f"  ✅ CoreML model saved: {output_path} ({size_mb:.1f} MB)")
-    print(f"  🚀 Compute units: {compute_units}")
-    print(f"  💡 On Apple Silicon, CoreML runs on Neural Engine for max speed")
+    logger.info(f"CoreML model saved: {output_path} ({size_mb:.1f} MB)")
+    logger.info(f"  Compute units: {compute_units}")
+    logger.info("  On Apple Silicon, CoreML runs on Neural Engine for max speed")
 
     return output_path
 
@@ -127,7 +128,7 @@ def export_coreml_from_torch(
 
     mlmodel.save(output_path)
     size_mb = _dir_size(output_path) / (1024 ** 2)
-    print(f"✅ PyTorch → CoreML: {output_path} ({size_mb:.1f} MB)")
+    logger.info(f"PyTorch → CoreML: {output_path} ({size_mb:.1f} MB)")
 
     return output_path
 

@@ -32,9 +32,11 @@ from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
 from skywater_seg.utils import (
+    CLASS_COLORS_RGB,
     compute_dice,
     compute_iou,
     compute_pixel_accuracy,
+    configure_backend,
     create_scheduler,
     get_device,
     load_checkpoint,
@@ -100,10 +102,7 @@ class Trainer:
         self.val_loader = val_loader
 
         self.device = get_device(config.device)
-        # Enable PyTorch 2.0+ built-in Flash Attention (speeds up Transformer models ~30%)
-        if self.device.type == "cuda" and hasattr(torch.backends.cuda, "sdp_kernel"):
-            torch.backends.cuda.enable_flash_sdp(True)
-            torch.backends.cuda.enable_mem_efficient_sdp(True)
+        configure_backend(self.device)
         if self.device.type == "mps":
             config.train.pin_memory = False
         set_seed(config.seed)
@@ -444,13 +443,7 @@ class Trainer:
         import cv2
 
         n = min(images.size(0), max_samples)
-        # Pseudo-color palette: BG=black, Sky=orange, Water=cyan, Person=magenta
-        PALETTE = np.array([
-            [0, 0, 0],       # 0: background
-            [255, 140, 0],   # 1: sky (orange)
-            [0, 200, 255],   # 2: water (cyan)
-            [230, 50, 230],  # 3: person (magenta)
-        ], dtype=np.uint8)
+        PALETTE = np.array([CLASS_COLORS_RGB[i] for i in range(4)], dtype=np.uint8)
         FONT = cv2.FONT_HERSHEY_SIMPLEX
 
         for i in range(n):

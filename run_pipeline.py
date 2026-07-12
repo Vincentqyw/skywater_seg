@@ -31,23 +31,25 @@ import sys
 import time
 from pathlib import Path
 
+from loguru import logger
+
 
 def run_step(name: str, cmd: list, env=None):
     """Run a pipeline step with pretty printing."""
-    print(f"\n{'='*60}")
-    print(f"▶ {name}")
-    print(f"  {' '.join(cmd)}")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"▶ {name}")
+    logger.info(f"  {' '.join(cmd)}")
+    logger.info(f"{'='*60}")
 
     start = time.time()
     result = subprocess.run(cmd, env=env)
     elapsed = time.time() - start
 
     if result.returncode != 0:
-        print(f"\n❌ Step failed after {elapsed:.0f}s: {name}")
+        logger.error(f"Step failed after {elapsed:.0f}s: {name}")
         sys.exit(1)
 
-    print(f"\n✅ {name} — completed in {elapsed:.0f}s")
+    logger.info(f"{name} — completed in {elapsed:.0f}s")
     return result
 
 
@@ -120,13 +122,14 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"\n{'='*60}")
-    print("🌊 Sky-Water Segmentation Pipeline")
-    print(f"   Platform: {'🍎 Apple Silicon' if is_apple_silicon else '💻 ' + ('macOS' if is_mac else 'Linux/Win')}")
+    logger.info(f"\n{'='*60}")
+    logger.info("Sky-Water Segmentation Pipeline")
+    platform_str = "Apple Silicon" if is_apple_silicon else ("macOS" if is_mac else "Linux/Win")
+    logger.info(f"   Platform: {platform_str}")
     if is_apple_silicon:
-        print(f"   Acceleration: MPS (GPU) + ANE (CoreML export)")
-    print(f"   Image dir:  {args.image_dir}")
-    print(f"{'='*60}")
+        logger.info("   Acceleration: MPS (GPU) + ANE (CoreML export)")
+    logger.info(f"   Image dir:  {args.image_dir}")
+    logger.info(f"{'='*60}")
 
     project_root = Path(__file__).parent
     env = dict(**__import__("os").environ)
@@ -148,9 +151,9 @@ def main():
         run_step("Phase 1: Auto-Annotation (Grounding DINO + SAM)", cmd)
 
         if args.annotate_only:
-            print("\n✅ Annotation complete. Masks saved to:", args.mask_dir)
-            print("   Review masks, then run:")
-            print(f"   uv run python run_pipeline.py --image-dir {args.image_dir} --train-only")
+            logger.info(f"Annotation complete. Masks saved to: {args.mask_dir}")
+            logger.info("   Review masks, then run:")
+            logger.info(f"   uv run python run_pipeline.py --image-dir {args.image_dir} --train-only")
             return
 
     # ---- Phase 2: Training ----
@@ -173,10 +176,10 @@ def main():
             )
             checkpoint_path = str(Path(args.output_dir) / "best_model.pth")
         else:
-            print(f"\n⏭️  Using existing checkpoint: {checkpoint_path}")
+            logger.info(f"Using existing checkpoint: {checkpoint_path}")
 
         if args.train_only:
-            print(f"\n✅ Training complete. Model: {checkpoint_path}")
+            logger.info(f"Training complete. Model: {checkpoint_path}")
             return
 
     # ---- Phase 3: Export ----
@@ -207,27 +210,27 @@ def main():
                     "--export-coreml", coreml_path,
                 ],
             )
-            print(f"\n🚀 CoreML model for Apple Neural Engine: {coreml_path}")
+            logger.info(f"CoreML model for Apple Neural Engine: {coreml_path}")
     else:
         if args.export_only and not checkpoint_path:
-            print("⚠️  No checkpoint provided for export. Use --checkpoint PATH")
+            logger.warning("No checkpoint provided for export. Use --checkpoint PATH")
 
     # ---- Done ----
-    print(f"\n{'='*60}")
-    print("🎉 Pipeline Complete!")
-    print(f"{'='*60}")
-    print(f"  Masks:      {args.mask_dir}")
-    print(f"  Model:      {checkpoint_path}")
+    logger.info(f"\n{'='*60}")
+    logger.info("Pipeline Complete!")
+    logger.info(f"{'='*60}")
+    logger.info(f"  Masks:      {args.mask_dir}")
+    logger.info(f"  Model:      {checkpoint_path}")
     if args.export_onnx:
-        print(f"  ONNX:       {Path(args.output_dir) / 'skywater_seg.onnx'}")
+        logger.info(f"  ONNX:       {Path(args.output_dir) / 'skywater_seg.onnx'}")
     if args.export_coreml and is_mac:
-        print(f"  CoreML:     {Path(args.output_dir) / 'skywater_seg.mlpackage'}")
-    print()
-    print("📋 Quick Inference:")
-    print(f"  uv run python inference.py --checkpoint {checkpoint_path} -i <image>")
+        logger.info(f"  CoreML:     {Path(args.output_dir) / 'skywater_seg.mlpackage'}")
+    logger.info("")
+    logger.info("Quick Inference:")
+    logger.info(f"  uv run python inference.py --checkpoint {checkpoint_path} -i <image>")
     if args.export_onnx:
-        print(f"  uv run python inference.py --onnx {onnx_path} -i <image>")
-    print(f"{'='*60}")
+        logger.info(f"  uv run python inference.py --onnx {onnx_path} -i <image>")
+    logger.info(f"{'='*60}")
 
 
 if __name__ == "__main__":

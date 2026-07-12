@@ -19,6 +19,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
 
 ADE_ROOT = Path("E:/datasets/ADEChallengeData2016")
@@ -67,8 +68,8 @@ def filter_split(split_name: str) -> list:
         else:
             no_target += 1
 
-    print(f"  {split_name}: {len(valid)}/{total} images have targets "
-          f"({len(valid)/total*100:.1f}%), skipped {no_target}")
+    logger.info(f"  {split_name}: {len(valid)}/{total} images have targets "
+                f"({len(valid)/total*100:.1f}%), skipped {no_target}")
     return valid
 
 
@@ -83,16 +84,16 @@ def main():
     with open(train_path, "w") as f:
         for name in sorted(train_images):
             f.write(f"{name}\n")
-    print(f"\ntrain.txt: {len(train_images)} images -> {train_path}")
+    logger.info(f"train.txt: {len(train_images)} images -> {train_path}")
 
     val_path = OUT_DIR / "val.txt"
     with open(val_path, "w") as f:
         for name in sorted(val_images):
             f.write(f"{name}\n")
-    print(f"val.txt:   {len(val_images)} images -> {val_path}")
+    logger.info(f"val.txt:   {len(val_images)} images -> {val_path}")
 
-    print(f"\n[DONE] Ready for training!")
-    print(f"  uv run python train.py --config configs/ade20k_person.yaml")
+    logger.info("[DONE] Ready for training!")
+    logger.info("  uv run python train.py --config configs/ade20k_person.yaml")
 
 
 if __name__ == "__main__":

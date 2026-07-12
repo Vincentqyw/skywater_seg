@@ -44,6 +44,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from loguru import logger
+
 import cv2
 import numpy as np
 import torch
@@ -135,7 +137,7 @@ class GroundingDINODetector:
 
         self.precision = precision
         if precision == "fp16" and self.device == "cpu":
-            print("  ⚠️  FP16 not supported on CPU, falling back to FP32")
+            logger.warning("  ⚠️  FP16 not supported on CPU, falling back to FP32")
             self.precision = "fp32"
 
         self._use_amp = (self.precision == "fp16" and self.device in ("cuda", "mps"))
@@ -156,7 +158,7 @@ class GroundingDINODetector:
                 "pip install transformers>=4.40.0"
             )
 
-        print(f"  Loading Grounding DINO ({model_size}, {self.precision}) from {model_id}...")
+        logger.info(f"  Loading Grounding DINO ({model_size}, {self.precision}) from {model_id}...")
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
 
@@ -165,7 +167,7 @@ class GroundingDINODetector:
 
         self.model.to(self.device)
         self.model.eval()
-        print(f"  Grounding DINO loaded on {self.device} ({self.precision})")
+        logger.info(f"  Grounding DINO loaded on {self.device} ({self.precision})")
 
     def detect(
         self,
@@ -272,7 +274,7 @@ class SAMMaskGenerator:
 
         self.precision = precision
         if precision == "fp16" and self.device == "cpu":
-            print("  ⚠️  FP16 not supported on CPU, falling back to FP32")
+            logger.warning("  ⚠️  FP16 not supported on CPU, falling back to FP32")
             self.precision = "fp32"
 
         self._use_amp = (self.precision == "fp16" and self.device in ("cuda", "mps"))
@@ -312,13 +314,13 @@ class SAMMaskGenerator:
                 "pip install huggingface_hub"
             )
 
-        print(f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})...")
+        logger.info(f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})...")
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
         )
 
-        print(f"  Loading SAM ({model_type}, {self.precision})...")
+        logger.info(f"  Loading SAM ({model_type}, {self.precision})...")
         sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
 
         if self._use_amp:
@@ -327,7 +329,7 @@ class SAMMaskGenerator:
         sam.to(self.device)
         sam.eval()
         self.predictor = SamPredictor(sam)
-        print(f"  SAM loaded on {self.device} ({self.precision})")
+        logger.info(f"  SAM loaded on {self.device} ({self.precision})")
 
     def _load_mobile_sam(self, info: dict):
         """Load MobileSAM — ~9MB, ~60x smaller than ViT-H, drop-in SAM API."""
@@ -340,13 +342,13 @@ class SAMMaskGenerator:
         except ImportError:
             raise ImportError("huggingface_hub is required: pip install huggingface_hub")
 
-        print(f"  Downloading MobileSAM checkpoint (~9MB)...")
+        logger.info(f"  Downloading MobileSAM checkpoint (~9MB)...")
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
         )
 
-        print(f"  Loading MobileSAM ({self.precision})...")
+        logger.info(f"  Loading MobileSAM ({self.precision})...")
 
         # MobileSAM uses a lightweight ViT-Tiny encoder + SAM's mask decoder
         # Try the mobile_sam package first, fall back to manual loading
@@ -374,7 +376,7 @@ class SAMMaskGenerator:
         sam.eval()
         self.predictor = predictor_cls(sam)
         self._sam_model = sam
-        print(f"  MobileSAM loaded on {self.device} ({self.precision}) — ⚡ ~5x faster than ViT-B")
+        logger.info(f"  MobileSAM loaded on {self.device} ({self.precision}) — ⚡ ~5x faster than ViT-B")
 
     def _load_efficient_sam(self, info: dict):
         """Load EfficientSAM — ~15MB, good speed/quality trade-off."""
@@ -387,13 +389,13 @@ class SAMMaskGenerator:
         except ImportError:
             raise ImportError("huggingface_hub is required: pip install huggingface_hub")
 
-        print(f"  Downloading EfficientSAM checkpoint (~15MB)...")
+        logger.info(f"  Downloading EfficientSAM checkpoint (~15MB)...")
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
         )
 
-        print(f"  Loading EfficientSAM ({self.precision})...")
+        logger.info(f"  Loading EfficientSAM ({self.precision})...")
 
         # EfficientSAM exports as TorchScript; use custom wrapper
         try:
@@ -433,10 +435,10 @@ class SAMMaskGenerator:
             self.predictor = _EfficientSAMPredictor(
                 efficient_encoder, self._efficient_sam, self.device
             )
-            print(f"  EfficientSAM loaded on {self.device} ({self.precision}) — ⚡ ~3x faster than ViT-B")
+            logger.info(f"  EfficientSAM loaded on {self.device} ({self.precision}) — ⚡ ~3x faster than ViT-B")
 
         except Exception as e:
-            print(f"  ⚠️  EfficientSAM loading failed ({e}), falling back to MobileSAM...")
+            logger.warning(f"  ⚠️  EfficientSAM loading failed ({e}), falling back to MobileSAM...")
             self._load_mobile_sam(SAM_MODELS_FAST["mobile"])
 
     @staticmethod
@@ -631,7 +633,7 @@ class AutoAnnotator:
             if image_size > 768:
                 image_size = 768
             if verbose:
-                print("⚡ FAST MODE enabled: fp16 + mobile sam + 768px")
+                logger.info("⚡ FAST MODE enabled: fp16 + mobile sam + 768px")
 
         self.precision = precision
         self.box_threshold = box_threshold
@@ -649,15 +651,15 @@ class AutoAnnotator:
             self.device = "cpu"
 
         if verbose:
-            print("=" * 60)
-            print("Initializing Auto-Annotator")
-            print(f"  Device:    {self.device}")
-            print(f"  Precision: {self.precision}")
-            print(f"  GDINO:     {gdino_model}")
-            print(f"  SAM:       {sam_model}")
-            print(f"  Img size:  {image_size}px")
-            print(f"  Fast mode: {'ON ⚡' if fast_mode else 'off'}")
-            print("=" * 60)
+            logger.info("=" * 60)
+            logger.info("Initializing Auto-Annotator")
+            logger.info(f"  Device:    {self.device}")
+            logger.info(f"  Precision: {self.precision}")
+            logger.info(f"  GDINO:     {gdino_model}")
+            logger.info(f"  SAM:       {sam_model}")
+            logger.info(f"  Img size:  {image_size}px")
+            logger.info(f"  Fast mode: {'ON ⚡' if fast_mode else 'off'}")
+            logger.info("=" * 60)
 
         # Load models
         self.detector = GroundingDINODetector(
@@ -668,7 +670,7 @@ class AutoAnnotator:
         )
 
         if verbose:
-            print("\n✅ Auto-Annotator ready!\n")
+            logger.info("\n✅ Auto-Annotator ready!\n")
 
     def annotate(
         self,
@@ -861,14 +863,14 @@ class AutoAnnotator:
                     remaining.append(f)
             skipped = len(image_files) - len(remaining)
             if skipped > 0:
-                print(f"Skipping {skipped} already-annotated images")
+                logger.warning(f"Skipping {skipped} already-annotated images")
             image_files = remaining
 
         if not image_files:
-            print("All images already annotated!")
+            logger.info("All images already annotated!")
             return {"total": 0, "skipped": skipped}
 
-        print(f"Processing {len(image_files)} images...\n")
+        logger.info(f"Processing {len(image_files)} images...\n")
 
         results = []
         start_time = time.time()
@@ -894,7 +896,7 @@ class AutoAnnotator:
             except Exception as e:
                 import traceback
                 error_msg = f"{e}\n{traceback.format_exc()}"
-                print(f"\n⚠️  Error on {img_file.name}: {e}")
+                logger.warning(f"\n⚠️  Error on {img_file.name}: {e}")
                 results.append({
                     "image_path": str(img_file),
                     "status": "error",
@@ -929,17 +931,17 @@ class AutoAnnotator:
             json.dump({"summary": summary, "details": results}, f, indent=2)
 
         # Print
-        print(f"\n{'='*60}")
-        print("📊 Annotation Complete!")
-        print(f"  Images processed: {summary['total']}")
-        print(f"  ✅ Successful:     {summary['successful']}")
-        print(f"  ❌ Failed:         {summary['failed']}")
-        print(f"  ⏱️  Time:           {summary['elapsed_seconds']:.0f}s "
+        logger.info(f"\n{'='*60}")
+        logger.info("📊 Annotation Complete!")
+        logger.info(f"  Images processed: {summary['total']}")
+        logger.info(f"  ✅ Successful:     {summary['successful']}")
+        logger.info(f"  ❌ Failed:         {summary['failed']}")
+        logger.info(f"  ⏱️  Time:           {summary['elapsed_seconds']:.0f}s "
               f"({summary['avg_seconds_per_image']:.1f}s/img)")
         if successful:
-            print(f"  📐 Avg coverage:   {summary['avg_coverage_pct']:.1f}%")
-        print(f"  📁 Output:         {output_path}")
-        print(f"{'='*60}")
+            logger.info(f"  📐 Avg coverage:   {summary['avg_coverage_pct']:.1f}%")
+        logger.info(f"  📁 Output:         {output_path}")
+        logger.info(f"{'='*60}")
 
         return summary
 
@@ -1104,7 +1106,7 @@ Examples:
         for name, info in classes.items():
             assert "prompts" in info, f"Class '{name}' missing 'prompts'"
             assert "mask_value" in info, f"Class '{name}' missing 'mask_value'"
-        print(f"Loaded custom classes: {list(classes.keys())}")
+        logger.info(f"Loaded custom classes: {list(classes.keys())}")
 
     # ---- Initialize annotator ----
     annotator = AutoAnnotator(
@@ -1124,7 +1126,7 @@ Examples:
 
     if input_path.is_file():
         # Single image mode
-        print(f"Processing single image: {input_path.name}")
+        logger.info(f"Processing single image: {input_path.name}")
         mask, info = annotator.annotate(str(input_path), classes)
 
         output_path = Path(args.output)
@@ -1133,20 +1135,20 @@ Examples:
         # Save mask
         mask_file = output_path / f"{input_path.stem}_mask.png"
         cv2.imwrite(str(mask_file), mask)
-        print(f"Mask saved: {mask_file}")
+        logger.info(f"Mask saved: {mask_file}")
 
         # Save visualization
         if not args.no_viz:
             vis = annotator._visualize(str(input_path), mask, classes)
             vis_file = output_path / f"{input_path.stem}_vis.jpg"
             cv2.imwrite(str(vis_file), vis)
-            print(f"Visualization saved: {vis_file}")
+            logger.info(f"Visualization saved: {vis_file}")
 
         # Print stats
-        print(f"\nDetection stats:")
+        logger.info(f"\nDetection stats:")
         for det in info.get("detections", []):
-            print(f"  [{det['class']}] score={det['score']:.3f}")
-        print(f"Mask stats: {json.dumps(info['mask_stats'], indent=2)}")
+            logger.info(f"  [{det['class']}] score={det['score']:.3f}")
+        logger.info(f"Mask stats: {json.dumps(info['mask_stats'], indent=2)}")
 
     else:
         # Directory mode

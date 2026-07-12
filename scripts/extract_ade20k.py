@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import cv2
 import numpy as np
+from loguru import logger
 from PIL import Image
 from tqdm import tqdm
 
@@ -208,7 +209,7 @@ def process_split(
 
     # Find all JSON files recursively
     json_files = sorted(Path(images_root).rglob("*.json"))
-    print(f"Found {len(json_files)} JSON files in {split}")
+    logger.info(f"Found {len(json_files)} JSON files in {split}")
 
     results = []
     skipped_no_sky_water = 0
@@ -280,12 +281,12 @@ def process_split(
             "low": skipped_low_coverage,
         })
 
-    print(f"\n{split} summary:")
-    print(f"  JSON files scanned:  {len(json_files)}")
-    print(f"  Images extracted:    {processed}")
-    print(f"  Skipped (no sky/water): {skipped_no_sky_water}")
-    print(f"  Skipped (low coverage): {skipped_low_coverage}")
-    print(f"  Errors:              {errors}")
+    logger.info(f"\n{split} summary:")
+    logger.info(f"  JSON files scanned:  {len(json_files)}")
+    logger.info(f"  Images extracted:    {processed}")
+    logger.info(f"  Skipped (no sky/water): {skipped_no_sky_water}")
+    logger.info(f"  Skipped (low coverage): {skipped_low_coverage}")
+    logger.info(f"  Errors:              {errors}")
 
     return results
 
@@ -366,30 +367,30 @@ def main():
         with open(train_path, "w") as f:
             for name in sorted(train_images):
                 f.write(f"{name}.jpg\n")
-        print(f"\ntrain.txt: {len(train_images)} images -> {train_path}")
+        logger.info(f"\ntrain.txt: {len(train_images)} images -> {train_path}")
 
         # Write val.txt
         val_path = out_dir / "val.txt"
         with open(val_path, "w") as f:
             for name in sorted(val_images):
                 f.write(f"{name}.jpg\n")
-        print(f"val.txt:   {len(val_images)} images -> {val_path}")
+        logger.info(f"val.txt:   {len(val_images)} images -> {val_path}")
 
     # ---- Summary ----
     total = sum(len(r) for r in all_results.values())
-    print(f"\n{'='*60}")
-    print(f"✅ ADE20K extraction complete!")
-    print(f"   Total images extracted: {total}")
-    print(f"   Output directory: {out_dir}")
-    print(f"   Images: {out_dir / 'images'}")
-    print(f"   Masks:  {out_dir / 'masks'}")
-    print(f"\n   Ready for training:")
-    print(f"   uv run python train.py --config configs/default.yaml \\")
-    print(f"       --data.image_dir {out_dir / 'images'} \\")
-    print(f"       --data.mask_dir {out_dir / 'masks'} \\")
-    print(f"       --data.train_split {out_dir / 'train.txt'} \\")
-    print(f"       --data.val_split {out_dir / 'val.txt'}")
-    print(f"{'='*60}")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"✅ ADE20K extraction complete!")
+    logger.info(f"   Total images extracted: {total}")
+    logger.info(f"   Output directory: {out_dir}")
+    logger.info(f"   Images: {out_dir / 'images'}")
+    logger.info(f"   Masks:  {out_dir / 'masks'}")
+    logger.info(f"\n   Ready for training:")
+    logger.info(f"   uv run python train.py --config configs/default.yaml \\")
+    logger.info(f"       --data.image_dir {out_dir / 'images'} \\")
+    logger.info(f"       --data.mask_dir {out_dir / 'masks'} \\")
+    logger.info(f"       --data.train_split {out_dir / 'train.txt'} \\")
+    logger.info(f"       --data.val_split {out_dir / 'val.txt'}")
+    logger.info(f"{'='*60}")
 
 
 if __name__ == "__main__":
