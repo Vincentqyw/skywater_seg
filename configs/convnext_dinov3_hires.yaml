@@ -1,0 +1,93 @@
+# ============================================================
+# ConvNeXt-Tiny + DINOv3 — High-Resolution Edge-Aware Training
+# ============================================================
+# Optimized for fine boundary accuracy:
+#   - 768x768 input (2.25x more boundary pixels than 512)
+#   - encoder_output_stride=8 (preserves spatial detail)
+#   - Lower batch_size to fit RTX 3060 6GB
+#
+# Expected: +3-5% mIoU on water/sky boundaries vs 512px config
+
+experiment_name: skywater-convnext-dinov3-hires
+output_dir: ./checkpoints
+seed: 42
+device: cuda
+
+# ---- Dataset ----
+data:
+  image_dir: E:/datasets/ADEChallengeData2016/images
+  mask_dir: E:/datasets/ADEChallengeData2016/annotations
+  train_split: ./data/ade20k_person/train.txt
+  val_split: ./data/ade20k_person/val.txt
+  val_ratio: 0.15
+  image_size: [768, 768]                           # High-res for fine boundaries
+  num_classes: 4
+  ignore_index: 255
+
+  class_mapping:
+    3: 1       # sky
+    22: 2      # water
+    27: 2      # sea
+    61: 2      # river
+    105: 2     # fountain
+    110: 2     # swimming pool
+    114: 2     # waterfall
+    129: 2     # lake
+    13: 3      # person
+
+  augmentation: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.05
+  horizontal_flip: 0.5
+  vertical_flip: 0.0
+  rotation: 10.0
+  scale: [0.8, 1.2]
+
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+# ---- Model ----
+model:
+  name: deeplabv3plus
+  encoder_name: convnext-tiny
+  encoder_weights: dinov3                            # DINOv3 distilled
+  in_channels: 3
+  classes: 4
+  encoder_output_stride: 8                           # Stride 8 preserves spatial detail
+  decoder_channels: 256
+  decoder_atrous_rates: [6, 12, 18]                  # Adjusted for stride-8
+
+# ---- Training ----
+train:
+  batch_size: 6                                      # Reduced for 768x768 + stride-8
+  epochs: 80
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+
+  scheduler: cosine
+  lr_min: 0.000001
+  lr_warmup_epochs: 5
+
+  loss: dice_ce
+  ce_weight: 0.5
+  dice_weight: 0.5
+  class_weights: [0.3, 2.0, 2.0, 2.0]
+
+  mixed_precision: true
+  gradient_accumulation: 1
+  grad_clip: 1.0
+  num_workers: 0
+
+  val_every: 1
+  save_every: 10
+  early_stopping_patience: 20
+
+  log_every: 20
+  tensorboard: true
+  wandb: false
+
+  resume_from: ""

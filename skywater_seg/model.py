@@ -95,11 +95,13 @@ def create_model(config: Config) -> nn.Module:
         model = smp.PAN(**common_kwargs)
     elif model_name == "linknet":
         model = smp.Linknet(**common_kwargs)
+    elif model_name == "segformer":
+        model = smp.Segformer(**common_kwargs)
     else:
         raise ValueError(
             f"Unknown model: {model_name}. "
             f"Available: deeplabv3plus, deeplabv3, unet, unetplusplus, "
-            f"fpn, pspnet, pan, linknet"
+            f"fpn, pspnet, pan, linknet, segformer"
         )
 
     return model

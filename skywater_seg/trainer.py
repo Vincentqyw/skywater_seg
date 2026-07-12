@@ -100,6 +100,10 @@ class Trainer:
         self.val_loader = val_loader
 
         self.device = get_device(config.device)
+        # Enable PyTorch 2.0+ built-in Flash Attention (speeds up Transformer models ~30%)
+        if self.device.type == "cuda" and hasattr(torch.backends.cuda, "sdp_kernel"):
+            torch.backends.cuda.enable_flash_sdp(True)
+            torch.backends.cuda.enable_mem_efficient_sdp(True)
         if self.device.type == "mps":
             config.train.pin_memory = False
         set_seed(config.seed)
@@ -205,6 +209,7 @@ class Trainer:
                         self.model, self.optimizer, self.scheduler,
                         epoch + 1, {"miou": self.best_val_iou},
                         str(best_path), is_best=True,
+                        model_meta=self._model_meta(),
                     )
                     logger.info(f"Best model saved: {best_path} (mIoU={self.best_val_iou:.4f})")
                 else:
@@ -240,6 +245,7 @@ class Trainer:
                     self.model, self.optimizer, self.scheduler,
                     epoch + 1, {"miou": self.best_val_iou},
                     str(ckpt_path),
+                    model_meta=self._model_meta(),
                 )
                 logger.info(f"Checkpoint saved: {ckpt_path}")
 
@@ -561,6 +567,22 @@ class Trainer:
         self.current_epoch = ckpt.get("epoch", 0)
         self.best_val_iou = ckpt.get("metrics", {}).get("miou", 0.0)
         logger.info(f"  Resumed at epoch {self.current_epoch}, best mIoU={self.best_val_iou:.4f}")
+
+    def _model_meta(self) -> dict:
+        """Build metadata for self-contained checkpoint inference."""
+        cfg = self.config
+        return {
+            "model_name": cfg.model.name,
+            "encoder_name": cfg.model.encoder_name,
+            "encoder_weights": cfg.model.encoder_weights,
+            "classes": cfg.model.classes,
+            "in_channels": cfg.model.in_channels,
+            "image_size": list(cfg.data.image_size),
+            "num_classes": cfg.data.num_classes,
+            "mean": cfg.data.mean,
+            "std": cfg.data.std,
+            "class_mapping": cfg.data.class_mapping,
+        }
 
     def _log_val_progress(self, epoch: int, train_loss: float,
                           metrics: Dict[str, float], is_best: bool):

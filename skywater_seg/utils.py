@@ -210,8 +210,9 @@ def save_checkpoint(
     metrics: Dict,
     path: str,
     is_best: bool = False,
+    model_meta: Optional[Dict] = None,
 ):
-    """Save training checkpoint."""
+    """Save training checkpoint with model metadata for self-contained inference."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
     checkpoint = {
@@ -222,11 +223,13 @@ def save_checkpoint(
         "metrics": metrics,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
+    if model_meta:
+        checkpoint["model_meta"] = model_meta
 
-    torch.save(checkpoint, path)
+    torch.save(checkpoint, path, _use_new_zipfile_serialization=True)
     if is_best:
         best_path = str(Path(path).parent / "best_model.pth")
-        torch.save(checkpoint, best_path)
+        torch.save(checkpoint, best_path, _use_new_zipfile_serialization=True)
 
 
 def load_checkpoint(

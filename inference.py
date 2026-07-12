@@ -37,8 +37,8 @@ def main():
                         help="Input image or directory")
     parser.add_argument("--output", "-o", type=str, default="./results",
                         help="Output directory")
-    parser.add_argument("--config", type=str, default="configs/default.yaml",
-                        help="Config YAML (only needed for .pth checkpoint)")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Config YAML (optional — auto-detected from checkpoint if omitted)")
     parser.add_argument("--device", type=str, default="cuda",
                         help="Device: cuda or cpu")
     parser.add_argument("--export-onnx", type=str, default=None,
@@ -64,8 +64,10 @@ def main():
         infer = ONNXRuntimeInference(args.onnx)
     elif args.checkpoint:
         from skywater_seg.config import Config
-        config = Config.from_yaml(args.config) if Path(args.config).exists() else Config()
-
+        if args.config and Path(args.config).exists():
+            config = Config.from_yaml(args.config)
+        else:
+            config = None  # auto-detect from checkpoint metadata
         print(f"Loading checkpoint: {args.checkpoint}")
         infer = SegmentationInference(args.checkpoint, config, device=args.device)
 
@@ -126,7 +128,7 @@ def main():
             vis_path = output_path / f"{stem}_vis.jpg"
             cv2.imwrite(str(vis_path), vis)
 
-        print(f"  ✓ {stem} → sky={result['sky_mask'].sum():,}px, water={result['water_mask'].sum():,}px")
+        print(f"  [OK] {stem}: sky={result['sky_mask'].sum():,}px, water={result['water_mask'].sum():,}px")
 
     print(f"\nDone! {len(image_paths)} images → {output_path}")
 

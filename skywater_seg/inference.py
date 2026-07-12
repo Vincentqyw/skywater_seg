@@ -40,25 +40,30 @@ class SegmentationInference:
         """
         self.device = get_device(device)
 
-        # Create model
-        if config is None:
-            config = Config()
-        self.config = config
+        # Load checkpoint first to extract metadata
+        if checkpoint_path.endswith(".pth"):
+            state_dict = torch.load(
+                checkpoint_path, map_location=self.device, weights_only=False
+            )
+        else:
+            raise ValueError(f"Unsupported checkpoint format: {checkpoint_path}")
 
+        # Auto-detect config from checkpoint metadata, fall back to provided config
+        meta = state_dict.get("model_meta") if isinstance(state_dict, dict) else None
+        if meta is not None:
+            config = _config_from_meta(meta, config)
+            print(f"  [Auto] Config extracted from checkpoint: {meta['encoder_name']}")
+        elif config is None:
+            config = Config()
+            print("  [WARN] No config provided and no metadata in checkpoint — using defaults")
+
+        self.config = config
         self.model = create_model(config)
         self.model.to(self.device)
 
         # Load weights
-        if checkpoint_path.endswith(".pth"):
-            state_dict = torch.load(
-                checkpoint_path, map_location=self.device, weights_only=True
-            )
-            # Handle both full checkpoint and state_dict-only files
-            if "model_state_dict" in state_dict:
-                state_dict = state_dict["model_state_dict"]
-            self.model.load_state_dict(state_dict)
-        else:
-            raise ValueError(f"Unsupported checkpoint format: {checkpoint_path}")
+        model_weights = state_dict.get("model_state_dict", state_dict)
+        self.model.load_state_dict(model_weights)
 
         self.model.eval()
         self.num_classes = config.model.classes
@@ -66,6 +71,7 @@ class SegmentationInference:
 
         print(f"Model loaded on {self.device}")
         print(f"  Classes: {self.num_classes}")
+        print(f"  Input size: {self.image_size}")
         print(f"  Input size: {self.image_size}")
 
     @torch.no_grad()
@@ -300,9 +306,9 @@ class SegmentationInference:
                 model_simp, check = onnx_simplify(onnx_model)
                 if check:
                     onnx.save(model_simp, output_path)
-                    print("  ONNX model simplified ✓")
+                    print("  [OK] ONNX simplified")
                 else:
-                    print("  ⚠️ ONNX simplification check failed, using original")
+                    print("  [WARN] ONNX simplification check failed, using original")
             except ImportError:
                 print("  ℹ️ onnx-simplifier not installed, skipping simplification")
                 print("    Install with: pip install onnx-simplifier")
@@ -467,12 +473,43 @@ def run_inference_cli(
     print(f"Done! Results saved to {output_dir}")
 
 
+def _config_from_meta(meta: dict, fallback: Optional[Config] = None) -> Config:
+    """Build a Config from checkpoint metadata, merging with optional fallback."""
+    from skywater_seg.config import Config, DataConfig, ModelConfig
+
+    cfg = fallback if fallback else Config()
+
+    if "image_size" in meta:
+        cfg.data.image_size = tuple(meta["image_size"])
+    if "num_classes" in meta:
+        cfg.data.num_classes = meta["num_classes"]
+    if "mean" in meta:
+        cfg.data.mean = meta["mean"]
+    if "std" in meta:
+        cfg.data.std = meta["std"]
+    if "class_mapping" in meta and meta["class_mapping"]:
+        cfg.data.class_mapping = {int(k): v for k, v in meta["class_mapping"].items()}
+
+    cfg.model.name = meta.get("model_name", cfg.model.name)
+    cfg.model.encoder_name = meta.get("encoder_name", cfg.model.encoder_name)
+    cfg.model.encoder_weights = meta.get("encoder_weights", cfg.model.encoder_weights)
+    cfg.model.classes = meta.get("classes", cfg.model.classes)
+    cfg.model.in_channels = meta.get("in_channels", cfg.model.in_channels)
+
+    return cfg
+
+
 def draw_overlay(
     image: Union[str, np.ndarray],
     mask: np.ndarray,
     alpha: float = 0.4,
 ) -> np.ndarray:
-    """Draw segmentation mask overlay on image.
+    """Draw segmentation mask overlay with contour outlines.
+
+    Colors (BGR):
+      Sky:    gold/orange  — warm, won't clash with blue sky
+      Water:  turquoise    — distinct teal, visible against sky/sea
+      Person: magenta
 
     Returns BGR image.
     """
@@ -487,9 +524,23 @@ def draw_overlay(
     if img.shape[:2] != (h, w):
         img = cv2.resize(img, (w, h))
 
+    # Fill overlay
+    COLORS = {
+        1: (80, 190, 255),   # Sky: BGR gold → RGB (255, 190, 80) warm amber
+        2: (180, 160, 60),   # Water: BGR teal → RGB (60, 160, 180) turquoise
+        3: (200, 50, 220),   # Person: BGR magenta
+    }
+
     overlay = np.zeros_like(img)
-    overlay[mask == 1] = [255, 140, 0]   # Sky: orange
-    overlay[mask == 2] = [0, 200, 255]   # Water: cyan
+    for cls_id, color in COLORS.items():
+        overlay[mask == cls_id] = color
 
     vis = cv2.addWeighted(img, 1 - alpha, overlay, alpha, 0)
+
+    # Draw contour outlines (makes boundaries visible even at low alpha)
+    for cls_id, color in COLORS.items():
+        binary = (mask == cls_id).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(vis, contours, -1, color, 2)
+
     return vis
