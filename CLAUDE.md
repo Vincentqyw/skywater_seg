@@ -8,7 +8,7 @@ Sky-Water-Person Segmentation Pipeline — a three-phase system that automatical
 
 **Target:** Mask out sky, water, and person regions in images to eliminate their interference with SfM (Structure from Motion) and image matching pipelines.
 
-**Version:** 0.2.0
+**Version:** 0.3.0
 
 ## Environment & Package Management
 
@@ -125,6 +125,8 @@ Grounding DINO + SAM    →    DeepLabV3+ / ConvNeXt       →    ONNX / CoreML 
 - **`auto_annotate.py`** (41KB): Full Grounding DINO + SAM annotation pipeline. Text prompts → bounding boxes (GDINO) → pixel masks (SAM). Supports custom class definitions via JSON (`custom_classes_example.json`). Outputs multi-class mask PNGs (0=bg, 1=sky, 2=water, 3=person) plus visualization overlays and summary JSON.
 - **`extract_ade20k.py`**: Converts ADE20K 2021 dataset annotations to sky/water masks compatible with the training pipeline. Matches sky and water objects by WordNet name against predefined name sets.
 - **`prepare_ade20k_person.py`**: Filters ADEChallengeData2016 annotations for images containing sky/water/person classes, generates `train.txt`/`val.txt` split files. Used as a preprocessing step before training with `ade20k_person.yaml` or `convnext_dinov3.yaml`.
+- **`gen_readme_figures.py`**: Generates paper-style 2×2 comparison figures (Input/GT/Overlay+Contours/Prediction) from ADE20K val + SkySeg test images. Outputs fixed-size 1120×700 panels to `results/<name>/figure.jpg`.
+- **`eval_segformer_b2.py`**: Computes per-class IoU, Dice, Precision, Recall on the ADE20K validation set.
 
 ### Configuration System
 
@@ -137,6 +139,7 @@ Grounding DINO + SAM    →    DeepLabV3+ / ConvNeXt       →    ONNX / CoreML 
   - `ade20k_person.yaml` — ADE20K filtered via `prepare_ade20k_person.py`, 4-class, MobileNetV3
   - `convnext_dinov3.yaml` — ADE20K filtered, ConvNeXt-Tiny + DINOv3, 4-class, high quality
   - `multi_dataset.yaml` — ADE20K + Cityscapes mixed, ConvNeXt-Tiny + DINOv3, weighted sampling
+  - `segformer_b2.yaml` — ADE20K filtered, SegFormer MiT-B2, 4-class, transformer-based, best quality
 - CLI overrides use dot-notation and auto-type-cast to match the dataclass field types (see `train.py:apply_dot_updates`)
 - Saved config is written to `{output_dir}/{experiment_name}/config.yaml` on each training run
 
@@ -172,6 +175,7 @@ The codebase has explicit MPS/ANE awareness throughout:
 
 - **Default model**: DeepLabV3+ with `timm-mobilenetv3_large_100` encoder (~5M params, ImageNet pretrained)
 - **High-quality model**: DeepLabV3+ with `convnext-tiny` encoder (~29M params, DINOv3-distilled weights from Meta LVD-1689M)
+- **Best model**: SegFormer MiT-B2 (~24.7M params, ImageNet pretrained, transformer-based). Fine-tuned on ADE20K sky/water/person. **mIoU 94.7%, Sky IoU 92.1%, Pixel Accuracy 97.3%** on 1,111 val images.
 - **Default loss**: `CombinedLoss` (0.5×CrossEntropy + 0.5×Dice), ignores index 255
 - **Normalization**: ImageNet stats (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`)
 - **Input size**: 512×512 default (configurable; 256×256 for memory-constrained setups)

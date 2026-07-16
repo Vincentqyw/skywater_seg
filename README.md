@@ -3,21 +3,67 @@
 **Auto-annotation → training → deployment.** A complete pipeline that generates segmentation masks with Grounding DINO + SAM, trains a lightweight model, and deploys via ONNX / CoreML. Built with `uv`, optimized for NVIDIA GPUs and Apple Silicon.
 
 > **Goal:** Mask out sky, water, and person regions to eliminate interference in SfM and image matching pipelines.
+>
+> **Current model:** SegFormer MiT-B2 (24.7M params), fine-tuned on ADE20K sky/water/person subset.  
+> **Author:** [Vincent Qin](https://github.com/Vincentqyw)
 
 ---
 
-## Architecture
+## Evaluation
 
-```
-Phase 1: Auto-Annotation           Phase 2: Training                Phase 3: Deployment
-┌─────────────────────────┐       ┌─────────────────────────┐      ┌──────────────────────┐
-│ Grounding DINO + SAM    │  →    │ DeepLabV3+ / ConvNeXt   │  →   │ ONNX / CoreML (ANE)  │
-│ text prompts → boxes    │       │ ~5M–30M params          │      │ <5 ms inference       │
-│ → pixel masks           │       │ MPS / CUDA / AMP        │      │ ~10 MB model          │
-└─────────────────────────┘       └─────────────────────────┘      └──────────────────────┘
-```
+SegFormer B2 (`best_model.pth`) on ADE20K validation set (1,111 images, 384×384 input):
 
-**Classes:** 0 = background, 1 = sky, 2 = water, 3 = person
+| Class | IoU | Dice | Precision | Recall |
+|-------|-----|------|-----------|--------|
+| Background | 96.6% | 98.3% | 98.9% | 97.7% |
+| **Sky** | **92.1%** | **95.9%** | 93.3% | 98.6% |
+| **Water** | 79.6% | 88.6% | 90.1% | 87.3% |
+| **Person** | 77.8% | 87.5% | 85.2% | 89.9% |
+| **Mean (fg)** | **88.1%** | **93.7%** | — | — |
+| **mIoU (all)** | **94.7%** | — | — | — |
+| **Pixel Accuracy** | **97.3%** | — | — | — |
+
+---
+
+## Visualization
+
+**SegFormer B2** (MiT-B2 encoder, 24.7M params). 2×2 layout: **Input | Ground Truth** (top), **Overlay + Boundaries | SegFormer B2** (bottom). Sky = orange, Water = cyan, Person = red.
+
+### ADE20K Validation (with ground truth)
+
+<table>
+<tr>
+<td><img src="results/ade_ADE_val_00000261/figure.jpg" width="100%"></td>
+<td><img src="results/ade_ADE_val_00000260/figure.jpg" width="100%"></td>
+</tr>
+<tr>
+<td><img src="results/ade_ADE_val_00000590/figure.jpg" width="100%"></td>
+<td><img src="results/ade_ADE_val_00001354/figure.jpg" width="100%"></td>
+</tr>
+<tr>
+<td><img src="results/ade_ADE_val_00001674/figure.jpg" width="100%"></td>
+<td><img src="results/ade_ADE_val_00000399/figure.jpg" width="100%"></td>
+</tr>
+</table>
+
+### Real-World Images (SkySeg test set, no GT)
+
+<table>
+<tr>
+<td><img src="results/0015_096/figure.jpg" width="100%"></td>
+<td><img src="results/264489593_6de914a0ab_o.jpg/figure.jpg" width="100%"></td>
+</tr>
+<tr>
+<td><img src="results/3134760025_0aaa4fdc8b_o/figure.jpg" width="100%"></td>
+<td><img src="results/331810308_2fe422b1ec_o.jpg/figure.jpg" width="100%"></td>
+</tr>
+<tr>
+<td><img src="results/525678483_c9b1a3665a_o.jpg/figure.jpg" width="100%"></td>
+<td><img src="results/981256188_8f690e95b1_o.jpg/figure.jpg" width="100%"></td>
+</tr>
+</table>
+
+Per-class contours drawn on the overlay (bottom-left) show segmentation boundaries. Original images in `assets/`, per-image outputs in `results/<name>/`.
 
 ---
 
@@ -233,6 +279,8 @@ skywater/
 │   ├── coreml_export.py              # CoreML conversion & ANE inference (macOS)
 │   ├── utils.py                      # Metrics, visualization, checkpoint, schedulers
 │   └── cli.py                        # Package console_scripts entry points
+├── assets/                            # Test images (ADE20K + real-world)
+├── results/                           # Per-image outputs (mask, overlay, figure)
 ├── configs/
 │   ├── default.yaml                  # Custom flat-dir dataset, 3-class
 │   ├── ade_challenge.yaml            # ADE20K full, 4-class, 256px
@@ -300,3 +348,23 @@ skywater-infer --checkpoint model.pth --input test.jpg
 ## License
 
 MIT
+
+---
+
+## Citation
+
+If you use this project in your research, please cite:
+
+```bibtex
+@misc{qin2026skywater,
+  author       = {Vincent Qin},
+  title        = {Sky-Water-Person Segmentation: Auto-Annotation, Training, and Deployment Pipeline},
+  year         = {2026},
+  howpublished = {\url{https://github.com/Vincentqyw/skywater}},
+  note         = {Version 0.3.0. SegFormer MiT-B2 fine-tuned on ADE20K.}
+}
+```
+
+Or in plain text:
+
+> Qin, V. (2026). *Sky-Water-Person Segmentation: Auto-Annotation, Training, and Deployment Pipeline* (v0.3.0). GitHub. https://github.com/Vincentqyw/skywater

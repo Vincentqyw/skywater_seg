@@ -5,7 +5,7 @@ description = "Sky-water segmentation pipeline: auto-annotation + lightweight mo
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    { name = "SkyWater Team" }
+    { name = "Vincent Qin" }
 ]
 
 dependencies = [

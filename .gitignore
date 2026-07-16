@@ -48,8 +48,8 @@ Thumbs.db
 
 # Output / results
 output/
-results/
 
 # Third-party code
 thirdparty/
-
+scripts/eval_segformer_b2.py
+scripts/gen_readme_figures.py
