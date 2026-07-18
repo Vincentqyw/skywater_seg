@@ -55,16 +55,16 @@ uv sync
 from skywater_seg import load_model, segment_skywater, overlay_mask
 
 model = load_model()
-mask  = segment_skywater("assets/ade_ADE_val_00001674.jpg", model)   # 0=bg, 1=sky, 2=water, 3=person
-vis   = overlay_mask("assets/ade_ADE_val_00001674.jpg", mask)        # visualize
+mask  = segment_skywater("assets/ade/ade_ADE_val_00001674.jpg", model)   # 0=bg, 1=sky, 2=water, 3=person
+vis   = overlay_mask("assets/ade/ade_ADE_val_00001674.jpg", mask)        # visualize
 ```
 
 ```bash
 # Or CLI — from HuggingFace
-uv run python inference.py --hf -i assets/ade_ADE_val_00001674.jpg -o outputs/
+uv run python inference.py --hf -i assets/ade/ade_ADE_val_00001674.jpg -o outputs/
 
 # Or CLI — ONNX GPU (faster, no PyTorch needed)
-uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade_ADE_val_00001674.jpg -o outputs/
+uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade/ade_ADE_val_00001674.jpg -o outputs/
 ```
 
 ### 🎨 Interactive Demo (Gradio)
