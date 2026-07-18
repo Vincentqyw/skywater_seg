@@ -47,7 +47,7 @@ Pre-filter images for robust Structure-from-Motion and image matching.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/Vincentqyw/skywater_seg.git && cd skywater
+git clone https://github.com/Vincentqyw/skywater_seg.git && cd skywater_seg
 uv sync
 ```
 
