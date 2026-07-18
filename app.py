@@ -280,6 +280,10 @@ footer { display: none !important; }
 """
 
 
+# Base URL for assets hosted on GitHub (avoids binary files on HF Spaces)
+_ASSET_BASE = "https://raw.githubusercontent.com/Vincentqyw/skywater/main/assets"
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="SkyWater Segmentation") as demo:
         gr.Markdown(HEADER_MD)
@@ -299,8 +303,6 @@ def build_ui() -> gr.Blocks:
                     elem_id="run-btn",
                 )
 
-# Base URL for assets hosted on GitHub (avoids binary files on HF Spaces)
-_ASSET_BASE = "https://raw.githubusercontent.com/Vincentqyw/skywater/main/assets"
                 gr.Examples(
                     examples=[
                         f"{_ASSET_BASE}/hk.jpg",
