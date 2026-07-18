@@ -280,8 +280,12 @@ footer { display: none !important; }
 """
 
 
-# Base URL for assets hosted on GitHub (avoids binary files on HF Spaces)
-_ASSET_BASE = "https://raw.githubusercontent.com/Vincentqyw/skywater/main/assets"
+# Asset base path — local on dev, GitHub raw URLs on HF Spaces (no binary storage)
+_ASSET_BASE = (
+    "https://raw.githubusercontent.com/Vincentqyw/skywater/main/assets"
+    if _ON_SPACES
+    else "assets"
+)
 
 
 def build_ui() -> gr.Blocks:
