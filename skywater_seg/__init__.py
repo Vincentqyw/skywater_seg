@@ -1,0 +1,87 @@
+"""SkyWater Segmentation Package — inference, ONNX export, and visualization."""
+
+__version__ = "0.3.0"
+
+# ── Config ────────────────────────────────────────────────────────────
+from skywater_seg.config import Config, cli_to_dotlist, get_default_config
+
+# ── Inference ─────────────────────────────────────────────────────────
+from skywater_seg.inference import (
+    ONNXRuntimeInference,
+    SegmentationInference,
+    convert_onnx_fp16,
+    export_onnx,
+    load_model,
+    segment_skywater,
+)
+
+# ── Model ─────────────────────────────────────────────────────────────
+from skywater_seg.model import SkyWaterSegModel, create_model, get_model_info
+
+# ── Utilities ─────────────────────────────────────────────────────────
+from skywater_seg.utils import (
+    compute_dice,
+    compute_iou,
+    compute_pixel_accuracy,
+    configure_backend,
+    get_device,
+    set_seed,
+)
+
+# ── Visualization ─────────────────────────────────────────────────────
+from skywater_seg.visualization import (
+    CLASS_COLORS_RGB,
+    CLASS_NAMES,
+    NUM_CLASSES,
+    class_colors_bgr,
+    colorize_mask,
+    draw_overlay,
+    make_comparison_grid,
+    make_overlay_grid,
+    mask_to_color,
+    overlay_mask,
+    plot_iou_comparison,
+    plot_speed_comparison,
+    plot_summary_table,
+    tensor_to_image,
+)
+
+__all__ = [
+    # config
+    "Config",
+    "get_default_config",
+    "cli_to_dotlist",
+    # model
+    "SkyWaterSegModel",
+    "create_model",
+    "get_model_info",
+    # inference
+    "SegmentationInference",
+    "ONNXRuntimeInference",
+    "export_onnx",
+    "convert_onnx_fp16",
+    "load_model",
+    "segment_skywater",
+    # visualization
+    "CLASS_COLORS_RGB",
+    "CLASS_NAMES",
+    "NUM_CLASSES",
+    "class_colors_bgr",
+    "colorize_mask",
+    "mask_to_color",
+    "draw_overlay",
+    "overlay_mask",
+    "tensor_to_image",
+    "make_comparison_grid",
+    "make_overlay_grid",
+    "plot_speed_comparison",
+    "plot_iou_comparison",
+    "plot_summary_table",
+    # utils
+    "compute_iou",
+    "compute_dice",
+    "compute_pixel_accuracy",
+    "get_device",
+    "configure_backend",
+    "set_seed",
+]
