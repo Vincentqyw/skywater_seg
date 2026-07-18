@@ -1,7 +1,7 @@
 ---
 title: SkyWater Segmentation
 emoji: 🌤️
-colorFrom: orange
+colorFrom: yellow
 colorTo: blue
 sdk: gradio
 sdk_version: 6.20.0
