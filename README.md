@@ -47,7 +47,7 @@ Pre-filter images for robust Structure-from-Motion and image matching.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/Vincentqyw/skywater.git && cd skywater
+git clone https://github.com/Vincentqyw/skywater_seg.git && cd skywater
 uv sync
 ```
 
@@ -177,7 +177,7 @@ skywater/
   author       = {Vincent Qin},
   title        = {{SkyWater-Seg}: Segmenting Sky, Water, and Person Regions for Robust Structure-from-Motion Pre-processing},
   year         = {2026},
-  howpublished = {\url{https://github.com/Vincentqyw/skywater}},
+  howpublished = {\url{https://github.com/Vincentqyw/skywater_seg}},
 }
 ```
 
