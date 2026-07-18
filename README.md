@@ -55,16 +55,16 @@ uv sync
 from skywater_seg import load_model, segment_skywater, overlay_mask
 
 model = load_model()
-mask  = segment_skywater("photo.jpg", model)   # 0=bg, 1=sky, 2=water, 3=person
-overlay_mask("photo.jpg", mask)                # visualize
+mask  = segment_skywater("assets/ade_ADE_val_00001674.jpg", model)   # 0=bg, 1=sky, 2=water, 3=person
+vis   = overlay_mask("assets/ade_ADE_val_00001674.jpg", mask)        # visualize
 ```
 
 ```bash
 # Or CLI — from HuggingFace
-uv run python inference.py --hf -i photo.jpg
+uv run python inference.py --hf -i assets/ade_ADE_val_00001674.jpg -o outputs/
 
 # Or CLI — ONNX GPU (faster, no PyTorch needed)
-uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i photo.jpg
+uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade_ADE_val_00001674.jpg -o outputs/
 ```
 
 ### Reproduce the Best Model
@@ -72,7 +72,7 @@ uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i photo.jpg
 ```bash
 # 1. Download dataset from HuggingFace
 hf download Realcat/skywater --local-dir ./data
-unzip data/ADEChallengeData2016.zip -d path/to/
+unzip data/ADEChallengeData2016.zip -d path/to/your_dir
 
 # 2. Train SegFormer B2 (75 epochs, RTX 3060 6GB)
 uv run python train.py --config configs/models/segformer_b2.yaml

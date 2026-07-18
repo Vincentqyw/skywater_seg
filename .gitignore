@@ -48,6 +48,7 @@ Thumbs.db
 .claude/
 
 # Output / results
+outputs/
 output/
 
 # Third-party code
@@ -59,7 +60,7 @@ scripts/gen_readme_figures.py
 release/
 comparison_demo.png
 
-
+# Scripts
 scripts/benchmark_full.py
 scripts/benchmark_resolutions.py
 scripts/compare_resolutions.py
