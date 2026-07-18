@@ -21,9 +21,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-# Suppress spurious LR scheduler warning (we call scheduler after optimizer)
-warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimizer.step.*")
-
 from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
@@ -41,7 +38,10 @@ from skywater_seg.utils import (
     tensor_to_image,
     to_device,
 )
-from skywater_seg.visualization import colorize_mask, tensor_to_image
+from skywater_seg.visualization import colorize_mask
+
+# Suppress spurious LR scheduler warning (we call scheduler after optimizer)
+warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimizer.step.*")
 
 # TensorBoard tag hierarchy
 TB_LOSS = "Loss"

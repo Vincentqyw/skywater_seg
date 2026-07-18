@@ -11,7 +11,7 @@ Features:
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -22,6 +22,9 @@ from loguru import logger
 from skywater_seg.config import Config
 from skywater_seg.model import create_model
 from skywater_seg.utils import configure_backend, get_device
+
+if TYPE_CHECKING:
+    from skywater_seg.model import SkyWaterSegModel
 
 
 class SegmentationInference:

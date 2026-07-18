@@ -9,7 +9,7 @@ Supports:
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -17,6 +17,9 @@ import torch
 from torch.utils.data import Dataset
 
 from skywater_seg.config import Config
+
+if TYPE_CHECKING:
+    from skywater_seg.config import DataConfig
 
 # ── Robust image/mask loading (PIL-based, avoid OpenCV JP2 decode issues) ──
 

@@ -245,10 +245,12 @@ def create_scheduler(optimizer, config, steps_per_epoch: int):
         )
     elif config.train.scheduler == "poly":
         # Polynomial decay: lr = (lr - lr_min) * (1 - iter/max_iter)^power + lr_min
-        lambda_poly = lambda step: (
-            (1 - step / (total_steps - warmup_steps)) ** config.train.poly_power
-        )
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda_poly)
+        poly_power = config.train.poly_power
+
+        def _poly_lr(step):
+            return (1 - step / (total_steps - warmup_steps)) ** poly_power
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, _poly_lr)
     elif config.train.scheduler == "step":
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer,
