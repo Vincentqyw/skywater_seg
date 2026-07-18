@@ -15,15 +15,15 @@ license: mit
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Hugging Face](https://img.shields.io/badge/🤗-Model_on_HF-orange.svg)](https://huggingface.co/Realcat/skywater_seg)
-[![GitHub](https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater-24292e?logo=github&logoColor=white)](https://github.com/Vincentqyw/skywater)
+[![GitHub](https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater-24292e?logo=github&logoColor=white)](https://github.com/Vincentqyw/skywater_seg)
 
-> **Dual-maintained:** [GitHub](https://github.com/Vincentqyw/skywater) (source & training) &nbsp;|&nbsp; [🤗 HF Space](https://huggingface.co/spaces/Realcat/skywater_seg) (live demo)
+> **Dual-maintained:** [GitHub](https://github.com/Vincentqyw/skywater_seg) (source & training) &nbsp;|&nbsp; [🤗 HF Space](https://huggingface.co/spaces/Realcat/skywater_seg) (live demo)
 
 **Fine-tuned SegFormer B2** for sky, water, and person segmentation.  
 Pre-filter images for robust Structure-from-Motion and image matching.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
+  <img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
 </p>
 
 
@@ -53,7 +53,7 @@ Pre-filter images for robust Structure-from-Motion and image matching.
 | PyTorch FP32 | 23.0 ms | baseline |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/onnx_benchmark/speed_full.png" width="80%" alt="Speed comparison">
+  <img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/onnx_benchmark/speed_full.png" width="80%" alt="Speed comparison">
 </p>
 
 ---
@@ -62,7 +62,7 @@ Pre-filter images for robust Structure-from-Motion and image matching.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/Vincentqyw/skywater.git && cd skywater
+git clone https://github.com/Vincentqyw/skywater_seg.git && cd skywater
 uv sync
 ```
 
@@ -121,12 +121,12 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 
 <table>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/ade_ADE_val_00000261/figure.jpg" width="100%"></td>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/ade_ADE_val_00000260/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/ade_ADE_val_00000261/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/ade_ADE_val_00000260/figure.jpg" width="100%"></td>
 </tr>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/ade_ADE_val_00000590/figure.jpg" width="100%"></td>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/ade_ADE_val_00001354/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/ade_ADE_val_00000590/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/ade_ADE_val_00001354/figure.jpg" width="100%"></td>
 </tr>
 </table>
 
@@ -134,12 +134,12 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 
 <table>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/0015_096/figure.jpg" width="100%"></td>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/264489593_6de914a0ab_o.jpg/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/0015_096/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/264489593_6de914a0ab_o.jpg/figure.jpg" width="100%"></td>
 </tr>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/3134760025_0aaa4fdc8b_o/figure.jpg" width="100%"></td>
-<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater/main/results/331810308_2fe422b1ec_o.jpg/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/3134760025_0aaa4fdc8b_o/figure.jpg" width="100%"></td>
+<td><img src="https://raw.githubusercontent.com/Vincentqyw/skywater_seg/main/results/331810308_2fe422b1ec_o.jpg/figure.jpg" width="100%"></td>
 </tr>
 </table>
 
@@ -192,7 +192,7 @@ skywater/
   author       = {Vincent Qin},
   title        = {{SkyWater-Seg}: Segmenting Sky, Water, and Person Regions for Robust Structure-from-Motion Pre-processing},
   year         = {2026},
-  howpublished = {\url{https://github.com/Vincentqyw/skywater}},
+  howpublished = {\url{https://github.com/Vincentqyw/skywater_seg}},
 }
 ```
 
