@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Hugging Face](https://img.shields.io/badge/🤗-Model_on_HF-orange.svg)](https://huggingface.co/Realcat/skywater_seg)
+[![Hugging Face Space](https://img.shields.io/badge/🤗-Live_Demo-blue.svg)](https://huggingface.co/spaces/Realcat/skywater_seg)
 
 **Fine-tuned SegFormer B2** for sky, water, and person segmentation.  
 Pre-filter images for robust Structure-from-Motion and image matching.
@@ -11,45 +12,51 @@ Pre-filter images for robust Structure-from-Motion and image matching.
   <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
 </p>
 
-
----
-
 ## 📊 Performance
 
 **SegFormer MiT-B2** (24.7M params) · 384×384 · ADE20K filtered val (1,111 images)
 
 ### Accuracy
 
-| Class | IoU | Dice |
-|-------|-----|------|
-| Background | 96.6% | 98.3% |
-| Sky | **92.1%** | 95.9% |
-| Water | 79.4% | 88.5% |
-| Person | 77.8% | 87.5% |
-| **Foreground mIoU** | **88.1%** | — |
-| **Overall mIoU / PA** | **94.6%** / **97.2%** | — |
+| Class | IoU | Dice | Precision | Recall |
+|-------|-----|------|-----------|--------|
+| Background | 96.6% | 98.3% | 98.9% | 97.6% |
+| Sky | 92.1% | 95.9% | 93.3% | 98.6% |
+| Water | 79.4% | 88.5% | 89.9% | 87.2% |
+| Person | 77.8% | 87.5% | 85.0% | 90.1% |
+| **Foreground mIoU** | **88.1%** | — | — | — |
+| **Overall mIoU** | **94.6%** | — | — | — |
+| **Pixel Accuracy** | **97.2%** | — | — | — |
 
-### Speed (RTX 3060 Laptop)
 
-| Backend | Latency | vs PyTorch |
-|---------|---------|------------|
-| ONNX FP16 GPU | **13.6 ms** | **1.7× faster** |
-| ONNX FP32 GPU | 15.2 ms | 1.5× faster |
-| PyTorch FP32 | 23.0 ms | baseline |
+### Accuracy vs Speed
 
-<p align="center">
-  <img src="results/onnx_benchmark/speed_full.png" width="80%" alt="Speed comparison">
-</p>
+> All backends produce **pixel-identical** results (only 0.003% difference from FP16 weight quantization).
 
----
+| Backend | mIoU (fg) | mIoU (all) | PA | Latency |
+|---------|-----------|------------|-----|---------|
+| PyTorch FP32 | 88.1% | 94.6% | 97.2% | 23.0 ms |
+| ONNX FP32 GPU | 88.1% | 94.6% | 97.2% | 15.2 ms |
+| ONNX FP16 GPU | 88.1% | 94.6% | 97.2% | **13.6 ms** |
+| ONNX FP32 CPU | 88.1% | 94.6% | 97.2% | 169.5 ms |
+
+
 
 ## 🚀 Quick Start
+
+<details>
+<summary>📦 1. Install</summary>
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/Vincentqyw/skywater_seg.git && cd skywater_seg
 uv sync
 ```
+
+</details>
+
+<details>
+<summary>🐍 2. Python API</summary>
 
 ```python
 from skywater_seg import load_model, segment_skywater, overlay_mask
@@ -59,26 +66,34 @@ mask  = segment_skywater("assets/ade/ade_ADE_val_00001674.jpg", model)   # 0=bg,
 vis   = overlay_mask("assets/ade/ade_ADE_val_00001674.jpg", mask)        # visualize
 ```
 
+</details>
+
+<details>
+<summary>🖥️ 3. CLI</summary>
+
 ```bash
-# Or CLI — from HuggingFace
+# From HuggingFace
 uv run python inference.py --hf -i assets/ade/ade_ADE_val_00001674.jpg -o outputs/
 
-# Or CLI — ONNX GPU (faster, no PyTorch needed)
+# ONNX GPU (faster, no PyTorch needed)
 uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade/ade_ADE_val_00001674.jpg -o outputs/
 ```
+
+</details>
 
 ### 🎨 Interactive Demo (Gradio)
 
 ```bash
 uv run python app.py                           # HF Hub model (default)
-uv run python app.py --local checkpoint.pth    # local checkpoint
-uv run python app.py --onnx model.onnx         # ONNX Runtime
-uv run python app.py --share                   # public link
 ```
 
-Launch a Gradio web UI to explore segmentation interactively — upload an image, adjust overlay alpha, toggle contours, and inspect per-class masks across five tabs (**Overlay**, **Colorized Mask**, **Compare**, **Per-Class**, **Statistics**). Click example images to get started instantly.
+Launch a Gradio web UI to explore segmentation interactively. **Try it online at [🤗 HuggingFace Space](https://huggingface.co/spaces/Realcat/skywater_seg).**
 
 ### Reproduce the Best Model
+
+<details>
+
+<summary>📥 Download & Train</summary>
 
 ```bash
 # 1. Download dataset from HuggingFace
@@ -89,16 +104,16 @@ unzip data/ADEChallengeData2016.zip -d path/to/your_dir
 uv run python train.py --config configs/models/segformer_b2.yaml
 ```
 
+</details>
+
 ### Pre-trained Models
 
 | Model | Format | Size | Link |
 |-------|--------|------|------|
-| SegFormer B2 | PyTorch (safetensors) | ~95 MB | [HF Hub](https://huggingface.co/Realcat/skywater_seg) |
+| SegFormer B2 | PyTorch (safetensors) | 95 MB | [HF Hub](https://huggingface.co/Realcat/skywater_seg) |
 | SegFormer B2 | PyTorch (full ckpt) | 284 MB | [.pth](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2.pth) |
 | SegFormer B2 | ONNX FP32 | 95 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp32.onnx) |
 | SegFormer B2 | ONNX FP16 | 48 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp16.onnx) |
-
----
 
 ## 📸 Sample Results
 
@@ -128,8 +143,6 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 </tr>
 </table>
 
----
-
 ## 📖 Documentation
 
 | Guide | Description |
@@ -138,8 +151,6 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 | [Training](docs/training.md) | Model configs, presets, loss functions, architecture options |
 | [Evaluation & Benchmark](docs/evaluation.md) | Metrics, ONNX speed comparison, pixel identity validation |
 | [Deployment](docs/deployment.md) | ONNX export, CoreML, TorchScript, Python API |
-
----
 
 ## 🏗️ Project Structure
 
@@ -167,8 +178,6 @@ skywater/
 ├── app.py                 # Gradio interactive demo
 └── pyproject.toml
 ```
-
----
 
 ## 📝 Citation
 

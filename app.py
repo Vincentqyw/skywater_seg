@@ -21,6 +21,7 @@ import time
 
 import cv2
 import numpy as np
+from loguru import logger
 
 import gradio as gr
 
@@ -52,12 +53,8 @@ _USE_ONNX = False
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Inference helper
+# Inference
 # ═══════════════════════════════════════════════════════════════════════
-
-# Cache to avoid redundant inference in the .then() chain
-_CACHE_HASH: int | None = None
-_CACHE_MASK: np.ndarray | None = None
 
 
 def _ensure_rgb(image: np.ndarray) -> np.ndarray:
@@ -67,20 +64,11 @@ def _ensure_rgb(image: np.ndarray) -> np.ndarray:
     return image
 
 
-def run_inference(image: np.ndarray) -> np.ndarray:
-    """Run segmentation on an RGB image, return uint8 mask (H, W).
-
-    Caches the result by image hash so the .then() chain doesn't
-    re-run the model for each output tab.
-    """
-    global _CACHE_HASH, _CACHE_MASK
-
+def run_inference(image: np.ndarray | None) -> np.ndarray | None:
+    """Run segmentation, return uint8 mask (H, W). Called once per image."""
+    if image is None:
+        return None
     image = _ensure_rgb(image)
-    img_hash = hash(image.tobytes())
-
-    if img_hash == _CACHE_HASH and _CACHE_MASK is not None:
-        return _CACHE_MASK
-
     h, w = image.shape[:2]
     t0 = time.perf_counter()
 
@@ -98,11 +86,7 @@ def run_inference(image: np.ndarray) -> np.ndarray:
         f"{CLASS_NAMES[i]}={(mask == i).sum() / total_px * 100:.1f}%"
         for i in range(len(CLASS_NAMES))
     )
-
-    print(f"[inference] [{backend}] {w}×{h}  |  {elapsed:.0f} ms  |  {pcts}")
-
-    _CACHE_HASH = img_hash
-    _CACHE_MASK = mask
+    logger.info(f"[inference] [{backend}] {w}×{h}  |  {elapsed:.0f} ms  |  {pcts}")
     return mask
 
 
@@ -112,47 +96,39 @@ if _HAS_SPACES:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Tab: Overlay
+# Tab renderers — all take (image, mask, ...), never call inference
 # ═══════════════════════════════════════════════════════════════════════
 
 
 def process_overlay(
     image: np.ndarray | None,
+    mask: np.ndarray | None,
     alpha: float,
     draw_contours: bool,
 ) -> np.ndarray | None:
-    if image is None:
+    if image is None or mask is None:
         return None
     image = _ensure_rgb(image)
-    mask = run_inference(image)
     vis = overlay_mask(image, mask, alpha=alpha, draw_contours=draw_contours)
     return cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Tab: Colorized Mask
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def process_mask(image: np.ndarray | None) -> np.ndarray | None:
-    if image is None:
+def process_mask(
+    image: np.ndarray | None,
+    mask: np.ndarray | None,
+) -> np.ndarray | None:
+    if image is None or mask is None:
         return None
-    image = _ensure_rgb(image)
-    mask = run_inference(image)
     return mask_to_color(mask)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Tab: Per-Class Binary Masks
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def process_per_class(image: np.ndarray | None) -> tuple:
+def process_per_class(
+    image: np.ndarray | None,
+    mask: np.ndarray | None,
+) -> tuple:
     """Return (bg, sky, water, person) RGBA masks as a 2×2 grid."""
-    if image is None:
+    if image is None or mask is None:
         return None, None, None, None
-    image = _ensure_rgb(image)
-    mask = run_inference(image)
     return (
         _binary_to_colored(mask == 0, CLASS_COLORS_RGB[0]),
         _binary_to_colored(mask == 1, CLASS_COLORS_RGB[1]),
@@ -172,37 +148,28 @@ def _binary_to_colored(binary: np.ndarray, color: tuple) -> np.ndarray:
     return rgba
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Tab: Statistics
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def process_stats(image: np.ndarray | None):
+def process_stats(
+    image: np.ndarray | None,
+    mask: np.ndarray | None,
+):
     """Return a tuple of 4 percentage strings, one per class Label."""
-    if image is None:
+    if image is None or mask is None:
         return tuple("—" for _ in CLASS_NAMES)
-    image = _ensure_rgb(image)
-    mask = run_inference(image)
     total = mask.size
     return tuple(
         f"{100 * (mask == i).sum() / total:.1f}%" for i in range(len(CLASS_NAMES))
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Tab: Compare (Gradio native ImageSlider)
-# ═══════════════════════════════════════════════════════════════════════
-
-
 def process_compare_slider(
     image: np.ndarray | None,
+    mask: np.ndarray | None,
     alpha: float,
 ) -> tuple | None:
     """Return (original, overlay) tuple for gr.ImageSlider native comparison slider."""
-    if image is None:
+    if image is None or mask is None:
         return None
     image = _ensure_rgb(image)
-    mask = run_inference(image)
     overlay_bgr = overlay_mask(image, mask, alpha=alpha, draw_contours=True)
     overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
     return (image, overlay_rgb)
@@ -219,9 +186,9 @@ HEADER_MD = """
 
 Upload an image to segment **sky**, **water**, and **person** regions—designed to eliminate their interference with **SfM** and image-matching pipelines.
 
-<div style="display: flex; justify-content: center; gap: 6px; flex-wrap: nowrap;">
-<a href="https://github.com/Vincentqyw/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater_seg-24292e?logo=github&logoColor=white&style=flat-square" alt="GitHub"></a><a href="https://huggingface.co/Realcat/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Model-Realcat%2Fskywater__seg-ff9a00?style=flat-square" alt="HF Model"></a><a href="https://huggingface.co/datasets/Realcat/skywater" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Dataset-Realcat%2Fskywater-3b82f6?style=flat-square" alt="HF Dataset"></a>
-</div>
+[![GitHub](https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater_seg-24292e?logo=github&logoColor=white&style=flat-square)](https://github.com/Vincentqyw/skywater_seg)
+[![HF Model](https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Model-Realcat%2Fskywater__seg-ff9a00?style=flat-square)](https://huggingface.co/Realcat/skywater_seg)
+[![HF Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Dataset-Realcat%2Fskywater-3b82f6?style=flat-square)](https://huggingface.co/datasets/Realcat/skywater)
 
 **SegFormer MiT-B2** (24.7M) &nbsp;|&nbsp; 384×384 &nbsp;|&nbsp; mIoU 88.1% &nbsp;|&nbsp; ONNX · CoreML · PyTorch
 
@@ -233,7 +200,7 @@ Upload an image to segment **sky**, **water**, and **person** regions—designed
 GRADIO_CSS = """
 footer { display: none !important; }
 
-/* Input panel card */
+/* ── Input panel card ── */
 #input-col {
     background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%) !important;
     border: 1px solid #313244 !important;
@@ -241,13 +208,13 @@ footer { display: none !important; }
     padding: 16px !important;
 }
 
-/* Settings accordion */
+/* ── Settings accordion ── */
 #settings-accordion {
     border: 1px solid #45475a !important;
     border-radius: 8px !important;
 }
 
-/* Run button glow */
+/* ── Run button glow ── */
 #run-btn {
     background: linear-gradient(135deg, #f5a623 0%, #f76b1c 100%) !important;
     border: none !important;
@@ -260,18 +227,21 @@ footer { display: none !important; }
     box-shadow: 0 4px 15px rgba(245, 166, 35, 0.35) !important;
 }
 
-/* Tab underline accent */
-.tabs > .tab-nav > button.selected {
-    border-bottom-color: #f5a623 !important;
+/* ── Tab underline accent ── */
+[class*="tab"] button[aria-selected="true"],
+button[aria-selected="true"] {
+    border-bottom: 2px solid #f5a623 !important;
 }
 
-/* Examples grid: 3 per row, uniform thumbnails */
-#input-col .grid.gap-4 {
+/* ── Examples gallery: 3 per row ── */
+#input-col > div > div[class*="grid"] {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 8px !important;
 }
-#input-col .grid.gap-4 img {
+#input-col img[class*="example"],
+#input-col [class*="gallery"] img,
+#input-col div[class*="grid"] img {
     height: 80px !important;
     width: 100% !important;
     object-fit: cover !important;
@@ -375,30 +345,51 @@ def build_ui() -> gr.Blocks:
                             water_out = gr.Image(label="Water", height=310)
                             person_out = gr.Image(label="Person", height=310)
 
-        # ── Event binding ────────────────────────────────────────────
-        overlay_inputs = [input_img, alpha_slider, contours_chk]
-        compare_inputs = [input_img, alpha_slider]
+        # ── Hidden state: mask flows through the .then() chain ────────
+        mask_state = gr.State()
 
+        # ── Event binding ────────────────────────────────────────────
         btn.click(
-            fn=process_overlay, inputs=overlay_inputs, outputs=overlay_out,
-        ).then(fn=process_mask, inputs=[input_img], outputs=mask_out).then(
+            fn=run_inference, inputs=[input_img], outputs=[mask_state],
+        ).then(
+            fn=process_overlay,
+            inputs=[input_img, mask_state, alpha_slider, contours_chk],
+            outputs=overlay_out,
+        ).then(
+            fn=process_mask,
+            inputs=[input_img, mask_state],
+            outputs=mask_out,
+        ).then(
             fn=process_compare_slider,
-            inputs=compare_inputs,
+            inputs=[input_img, mask_state, alpha_slider],
             outputs=compare_out,
         ).then(
             fn=process_per_class,
-            inputs=[input_img],
+            inputs=[input_img, mask_state],
             outputs=[bg_out, sky_out, water_out, person_out],
         ).then(
-            fn=process_stats, inputs=[input_img], outputs=stats_labels,
+            fn=process_stats,
+            inputs=[input_img, mask_state],
+            outputs=stats_labels,
         )
 
-        # Update overlay + compare when alpha changes
+        # Update overlay + compare when alpha / contours change
         alpha_slider.change(
-            fn=process_overlay, inputs=overlay_inputs, outputs=overlay_out,
+            fn=process_overlay,
+            inputs=[input_img, mask_state, alpha_slider, contours_chk],
+            outputs=overlay_out,
         ).then(
             fn=process_compare_slider,
-            inputs=compare_inputs,
+            inputs=[input_img, mask_state, alpha_slider],
+            outputs=compare_out,
+        )
+        contours_chk.change(
+            fn=process_overlay,
+            inputs=[input_img, mask_state, alpha_slider, contours_chk],
+            outputs=overlay_out,
+        ).then(
+            fn=process_compare_slider,
+            inputs=[input_img, mask_state, alpha_slider],
             outputs=compare_out,
         )
 
@@ -415,26 +406,26 @@ def _load_model(local_path: str | None = None, onnx_path: str | None = None):
     global _MODEL, _ONNX_INFER, _USE_ONNX
 
     if onnx_path:
-        print(f"Loading ONNX model: {onnx_path}")
+        logger.info(f"Loading ONNX model: {onnx_path}")
         from skywater_seg.inference import ONNXRuntimeInference
 
         _ONNX_INFER = ONNXRuntimeInference(onnx_path, provider="cuda")
         _USE_ONNX = True
-        print(f"  ONNX Runtime ready — providers: {_ONNX_INFER.providers}")
+        logger.info(f"ONNX Runtime ready — providers: {_ONNX_INFER.providers}")
     elif local_path:
-        print(f"Loading local checkpoint: {local_path}")
+        logger.info(f"Loading local checkpoint: {local_path}")
         from skywater_seg.inference import SegmentationInference
 
         _MODEL = SegmentationInference(local_path).model
     else:
-        print("Loading model from HuggingFace Hub: Realcat/skywater_seg")
+        logger.info("Loading model from HuggingFace Hub: Realcat/skywater_seg")
         _MODEL = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
         _MODEL.eval()
         try:
             import torch
             device = "cuda" if torch.cuda.is_available() else "cpu"
             _MODEL.to(device)
-            print(f"  Model on: {device}")
+            logger.info(f"Model on: {device}")
         except Exception:
             pass
 
@@ -477,7 +468,7 @@ def main_cli():
         server_port=args.port,
         share=args.share,
         show_error=True,
-        theme=gr.themes.Soft(primary_hue="orange", secondary_hue="blue"),
+        theme=gr.themes.Ember(primary_hue="orange", secondary_hue="blue"),
         css=GRADIO_CSS,
     )
 
@@ -485,7 +476,7 @@ def main_cli():
 if __name__ == "__main__":
     if _ON_SPACES:
         # HuggingFace Spaces: no CLI, Gradio handles host/port automatically
-        print("🚀 Running on HuggingFace Spaces")
+        logger.info("🚀 Running on HuggingFace Spaces")
         main()
     else:
         main_cli()
