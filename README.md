@@ -67,6 +67,17 @@ uv run python inference.py --hf -i assets/ade_ADE_val_00001674.jpg -o outputs/
 uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade_ADE_val_00001674.jpg -o outputs/
 ```
 
+### 🎨 Interactive Demo (Gradio)
+
+```bash
+uv run python app.py                           # HF Hub model (default)
+uv run python app.py --local checkpoint.pth    # local checkpoint
+uv run python app.py --onnx model.onnx         # ONNX Runtime
+uv run python app.py --share                   # public link
+```
+
+Launch a Gradio web UI to explore segmentation interactively — upload an image, adjust overlay alpha, toggle contours, and inspect per-class masks across five tabs (**Overlay**, **Colorized Mask**, **Compare**, **Per-Class**, **Statistics**). Click example images to get started instantly.
+
 ### Reproduce the Best Model
 
 ```bash
@@ -153,6 +164,7 @@ skywater/
 ├── results/               # Output: masks, figures, benchmarks
 ├── train.py               # Training entry point
 ├── inference.py           # Inference entry point
+├── app.py                 # Gradio interactive demo
 └── pyproject.toml
 ```
 
@@ -163,8 +175,7 @@ skywater/
 ```bibtex
 @misc{qin2026skywater,
   author       = {Vincent Qin},
-  title        = {{SkyWater-Seg}: Segmenting Sky, Water, and Person Regions
-                  for Robust Structure-from-Motion Pre-processing},
+  title        = {{SkyWater-Seg}: Segmenting Sky, Water, and Person Regions for Robust Structure-from-Motion Pre-processing},
   year         = {2026},
   howpublished = {\url{https://github.com/Vincentqyw/skywater}},
 }

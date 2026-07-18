@@ -22,6 +22,7 @@ dependencies = [
     "onnxconverter-common>=1.16.0",
     "omegaconf>=2.3.1",
     "timm>=1.0.28",
+    "gradio>=6.20.0",
 ]
 
 # pip-compatible extras

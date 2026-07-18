@@ -215,11 +215,14 @@ class GroundingDINODetector:
             target_sizes=[(h, w)],
         )[0]
 
+        # transformers >= 4.51 returns "text_labels" (str); older uses "labels"
+        labels_key = "text_labels" if "text_labels" in results else "labels"
+
         detections = []
         for box, score, label in zip(
             results.get("boxes", []),
             results.get("scores", []),
-            results.get("labels", []),
+            results.get(labels_key, []),
         ):
             detections.append(
                 {
@@ -309,16 +312,35 @@ class SAMMaskGenerator:
                 "huggingface_hub is required. Install with: pip install huggingface_hub"
             )
 
-        logger.info(
-            f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})..."
-        )
-        checkpoint_path = hf_hub_download(
-            repo_id=info["repo"],
-            filename=info["filename"],
-        )
-
         logger.info(f"  Loading SAM ({model_type}, {self.precision})...")
-        sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
+
+        # Try original .pth checkpoint first; fall back to safetensors
+        try:
+            logger.info(
+                f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})..."
+            )
+            checkpoint_path = hf_hub_download(
+                repo_id=info["repo"],
+                filename=info["filename"],
+            )
+            sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
+
+        except Exception as e:
+            logger.warning(f"  ⚠️  .pth checkpoint unavailable ({e}), trying safetensors...")
+            # HF hub now stores SAM weights as model.safetensors
+            checkpoint_path = hf_hub_download(
+                repo_id=info["repo"],
+                filename="model.safetensors",
+            )
+            from safetensors.torch import load_file
+
+            state_dict = load_file(checkpoint_path)
+            # Remap keys: HF safetensors uses "vision_encoder" instead of "image_encoder"
+            remapped = {}
+            for key, value in state_dict.items():
+                remapped[key.replace("vision_encoder", "image_encoder")] = value
+            sam = sam_model_registry[model_type]()
+            sam.load_state_dict(remapped, strict=False)
 
         if self._use_amp:
             sam = sam.half()
