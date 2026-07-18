@@ -67,6 +67,20 @@ uv run python inference.py --hf -i photo.jpg
 uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i photo.jpg
 ```
 
+### Reproduce the Best Model
+
+```bash
+# 1. Download dataset from HuggingFace
+huggingface-cli download Realcat/skywater --local-dir ./data
+unzip data/ADEChallengeData2016.zip -d E:/datasets/
+
+# 2. Train SegFormer B2 (70 epochs, RTX 3060 6GB)
+uv run python train.py --config configs/models/segformer_b2.yaml
+
+# 3. Evaluate
+uv run python scripts/eval_segformer_b2.py
+```
+
 ### Pre-trained Models
 
 | Model | Format | Size | Link |

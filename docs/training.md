@@ -5,19 +5,16 @@ Fine-tune a segmentation model on annotated masks.
 ## Quick Start
 
 ```bash
-# Basic training on custom data
-uv run python train.py --config configs/models/mobilenetv3_flatdir.yaml \
-    --data.image_dir data/images --data.mask_dir data/masks
+# 1. Download dataset from HuggingFace
+huggingface-cli download Realcat/skywater --local-dir ./data
+unzip data/ADEChallengeData2016.zip -d E:/datasets/
 
-# ADE20K filtered split (sky/water/person present)
-uv run python scripts/prepare_ade20k.py   # one-time: generate split files
-uv run python train.py --config configs/datasets/ade20k.yaml
-
-# High-quality model with ConvNeXt + DINOv3
-uv run python train.py --config configs/models/convnext_dinov3.yaml
-
-# SegFormer B2 (best quality)
-uv run python train.py --config configs/models/segformer_b2.yaml
+# 2. Train (pick your config)
+uv run python train.py --config configs/models/segformer_b2.yaml           # SegFormer B2 (best)
+uv run python train.py --config configs/models/convnext_dinov3.yaml        # ConvNeXt + DINOv3
+uv run python train.py --config configs/datasets/ade20k_person.yaml        # MobileNetV3, filtered
+uv run python train.py --config configs/datasets/ade20k_full.yaml          # ADE20K full
+uv run python train.py --config configs/models/mobilenetv3_flatdir.yaml    # Custom data
 
 # CLI overrides (dot notation, auto-typed)
 uv run python train.py --config configs/models/mobilenetv3_flatdir.yaml \

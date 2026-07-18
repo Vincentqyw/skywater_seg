@@ -12,6 +12,8 @@ device: cuda
 
 # ---- Dataset ----
 data:
+  # Download: huggingface-cli download Realcat/skywater --local-dir ./data
+  #           unzip data/ADEChallengeData2016.zip -d E:/datasets/
   image_dir: E:/datasets/ADEChallengeData2016/images
   mask_dir: E:/datasets/ADEChallengeData2016/annotations
   train_split: ./data/ade20k/train.txt

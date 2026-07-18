@@ -1,51 +1,48 @@
 # Datasets
 
-Dataset preparation and supported formats for the skywater-seg pipeline.
+## Pre-packaged Dataset (Recommended)
 
-## ADE20K Setup
+The ADEChallengeData2016 dataset with pre-generated sky/water/person splits is
+available on HuggingFace:
 
-### Download
+```bash
+# 1. Download dataset (~1GB)
+huggingface-cli download Realcat/skywater --local-dir ./data
 
-Get `ADEChallengeData2016` from the [ADE20K website](https://groups.csail.mit.edu/vision/datasets/ADE20K/).
+# 2. Extract
+unzip data/ADEChallengeData2016.zip -d E:/datasets/
+```
 
-### Expected Layout
+After extraction you should have:
 
 ```
 E:/datasets/ADEChallengeData2016/
 ├── images/
-│   ├── training/
-│   │   ├── ADE_train_00000001.jpg
-│   │   └── ...  (20,210 images)
-│   └── validation/
-│       ├── ADE_val_00000001.jpg
-│       └── ...  (2,000 images)
+│   ├── training/   (20,210 images)
+│   └── validation/ (2,000 images)
 └── annotations/
     ├── training/
-    │   ├── ADE_train_00000001.png
-    │   └── ...
     └── validation/
-        ├── ADE_val_00000001.png
-        └── ...
 ```
 
-### Filtered Split (sky/water/person)
+The `data/ade20k/` directory (also downloaded from HF) contains the filtered
+train/val split files:
 
-Only ~12,000 of the 22,000 ADE20K images contain sky, water, or person.
-We provide pre-generated split files:
+```
+data/ade20k/
+├── train.txt   (11,086 lines)
+└── val.txt     (1,111 lines)
+```
+
+## Generate Splits Manually
+
+If you already have ADE20K downloaded:
 
 ```bash
-# Generate the filtered splits (requires ADE20K path)
 uv run python scripts/prepare_ade20k.py
-
-# Output:
-#   data/ade20k/train.txt  (11,086 images)
-#   data/ade20k/val.txt    (1,111 images)
 ```
 
-These splits are also available on Hugging Face in
-`data/train.txt` and `data/val.txt`.
-
-### Class Mapping
+## Class Mapping
 
 ADE20K uses 150 semantic classes. We remap to 4:
 
@@ -53,66 +50,28 @@ ADE20K uses 150 semantic classes. We remap to 4:
 |-----------|-------------|----------------|
 | 3 | sky | 1 (Sky) |
 | 13 | person | 3 (Person) |
-| 22 | water | 2 (Water) |
-| 27 | sea | 2 (Water) |
-| 61 | lake | 2 (Water) |
-| 105 | pond | 2 (Water) |
-| 110 | fountain | 2 (Water) |
-| 114 | waterfall | 2 (Water) |
-| 129 | river | 2 (Water) |
+| 22, 27, 61, 105, 110, 114, 129 | water bodies | 2 (Water) |
 | (all others) | — | 0 (Background) |
 
-Configured via `data.class_mapping` in the YAML config.
-
 ## Custom Data (Flat Directory)
-
-Simplest format for your own images:
 
 ```
 data/
 ├── images/
 │   ├── IMG_0001.jpg
-│   ├── IMG_0002.jpg
 │   └── ...
 └── masks/
     ├── IMG_0001_mask.png   # 0=bg, 1=sky, 2=water, 3=person
-    ├── IMG_0002_mask.png
     └── ...
 ```
 
-Use `configs/models/mobilenetv3_flatdir.yaml` with `data.image_dir` and `data.mask_dir`
-pointing to these directories.
+Use `configs/models/mobilenetv3_flatdir.yaml` with custom paths.
 
 ## Cityscapes
 
-The Cityscapes dataset is auto-detected via `data.cityscapes: true`:
+Set `data.cityscapes: true` and point `image_dir`/`mask_dir` to the Cityscapes
+root. Auto-detects `leftImg8bit/` and `gtFine/` subdirectories.
 
-```
-Cityscapes/
-├── leftImg8bit/
-│   ├── train/
-│   ├── val/
-│   └── test/
-└── gtFine/
-    ├── train/
-    ├── val/
-    └── test/
-```
+## Multi-Dataset
 
-## Multi-Dataset Training
-
-Mix datasets with weighted sampling:
-
-```yaml
-datasets:
-  - image_dir: path/to/ade20k/images
-    mask_dir: path/to/ade20k/annotations
-    ...
-  - image_dir: path/to/cityscapes/images
-    mask_dir: path/to/cityscapes/gtFine
-    cityscapes: true
-    ...
-mix_weights: [0.7, 0.3]  # 70% ADE20K, 30% Cityscapes
-```
-
-See `configs/datasets/multi_dataset.yaml` for a complete example.
+Mix datasets with weighted sampling — see `configs/datasets/multi_dataset.yaml`.
