@@ -15,8 +15,8 @@ device: cuda
 # -- Multi-Dataset Sources --
 datasets:
   - name: ade20k
-    image_dir: E:/datasets/ADEChallengeData2016/images
-    mask_dir: E:/datasets/ADEChallengeData2016/annotations
+    image_dir: path/to/ADEChallengeData2016/images
+    mask_dir: path/to/ADEChallengeData2016/annotations
     class_mapping:
       3: 1       # sky
       22: 2      # water
@@ -29,8 +29,8 @@ datasets:
       13: 3      # person
 
   - name: cityscapes
-    image_dir: E:/datasets/CityScapes/leftImg8bit
-    mask_dir: E:/datasets/CityScapes/gtFine
+    image_dir: path/to/CityScapes/leftImg8bit
+    mask_dir: path/to/CityScapes/gtFine
     class_mapping:
       23: 1      # sky
       21: 2      # water

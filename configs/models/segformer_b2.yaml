@@ -13,11 +13,11 @@ seed: 42
 device: cuda
 
 # ---- Dataset ----
-# Download: huggingface-cli download Realcat/skywater --local-dir ./data
-#           unzip data/ADEChallengeData2016.zip -d E:/datasets/
+# Download: hf download Realcat/skywater --local-dir ./data
+#           unzip data/ADEChallengeData2016.zip -d path/to/
 data:
-  image_dir: E:/datasets/ADEChallengeData2016/images
-  mask_dir: E:/datasets/ADEChallengeData2016/annotations
+  image_dir: path/to/ADEChallengeData2016/images
+  mask_dir: path/to/ADEChallengeData2016/annotations
   train_split: ./data/ade20k/train.txt
   val_split: ./data/ade20k/val.txt
   val_ratio: 0.15

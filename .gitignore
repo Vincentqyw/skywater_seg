@@ -64,5 +64,4 @@ scripts/benchmark_full.py
 scripts/benchmark_resolutions.py
 scripts/compare_resolutions.py
 results/benchmark_resolutions/
-results/onnx_benchmark/
 results/resolution_comparison/

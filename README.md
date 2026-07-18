@@ -8,7 +8,7 @@
 regions to eliminate interference in SfM and image matching pipelines.
 
 <p align="center">
-  <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
+  <img src="assets/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
 </p>
 
 
@@ -38,7 +38,7 @@ regions to eliminate interference in SfM and image matching pipelines.
 | PyTorch FP32 | 23.0 ms | baseline |
 
 <p align="center">
-  <img src="results/onnx_benchmark/speed_full.png" width="80%" alt="Speed comparison">
+  <img src="assets/speed_full.png" width="80%" alt="Speed comparison">
 </p>
 
 ---
@@ -71,14 +71,11 @@ uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i photo.jpg
 
 ```bash
 # 1. Download dataset from HuggingFace
-huggingface-cli download Realcat/skywater --local-dir ./data
-unzip data/ADEChallengeData2016.zip -d E:/datasets/
+hf download Realcat/skywater --local-dir ./data
+unzip data/ADEChallengeData2016.zip -d path/to/
 
-# 2. Train SegFormer B2 (70 epochs, RTX 3060 6GB)
+# 2. Train SegFormer B2 (75 epochs, RTX 3060 6GB)
 uv run python train.py --config configs/models/segformer_b2.yaml
-
-# 3. Evaluate
-uv run python scripts/eval_segformer_b2.py
 ```
 
 ### Pre-trained Models
@@ -149,10 +146,7 @@ skywater/
 │   └── utils.py           # Metrics, device, checkpoint, schedulers
 ├── scripts/
 │   ├── auto_annotate.py   # Grounding DINO + SAM annotation pipeline
-│   ├── prepare_ade20k.py  # ADE20K → sky/water/person splits
-│   ├── eval_segformer_b2.py      # PyTorch metric evaluation
-│   ├── benchmark_full.py         # ONNX export + speed/accuracy benchmark
-│   └── gen_readme_figures.py     # Paper-style 2×2 comparison figures
+│   └── prepare_ade20k.py  # ADE20K → sky/water/person splits
 ├── configs/               # Training configs (YAML)
 ├── docs/                  # Documentation
 ├── tests/                 # Pytest suite
@@ -174,9 +168,6 @@ uv sync --group dev              # Dev tools (pytest, matplotlib)
 
 # Run tests
 uv run pytest tests/ -v
-
-# Export model for HF
-uv run python scripts/benchmark_full.py
 ```
 
 ---

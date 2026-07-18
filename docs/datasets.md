@@ -7,16 +7,16 @@ available on HuggingFace:
 
 ```bash
 # 1. Download dataset (~1GB)
-huggingface-cli download Realcat/skywater --local-dir ./data
+hf download Realcat/skywater --local-dir ./data
 
 # 2. Extract
-unzip data/ADEChallengeData2016.zip -d E:/datasets/
+unzip data/ADEChallengeData2016.zip -d path/to/
 ```
 
 After extraction you should have:
 
 ```
-E:/datasets/ADEChallengeData2016/
+path/to/ADEChallengeData2016/
 ├── images/
 │   ├── training/   (20,210 images)
 │   └── validation/ (2,000 images)

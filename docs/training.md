@@ -6,8 +6,8 @@ Fine-tune a segmentation model on annotated masks.
 
 ```bash
 # 1. Download dataset from HuggingFace
-huggingface-cli download Realcat/skywater --local-dir ./data
-unzip data/ADEChallengeData2016.zip -d E:/datasets/
+hf download Realcat/skywater --local-dir ./data
+unzip data/ADEChallengeData2016.zip -d path/to/
 
 # 2. Train (pick your config)
 uv run python train.py --config configs/models/segformer_b2.yaml           # SegFormer B2 (best)
