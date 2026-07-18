@@ -220,7 +220,7 @@ HEADER_MD = """
 Upload an image to segment **sky**, **water**, and **person** regions—designed to eliminate their interference with **SfM** and image-matching pipelines.
 
 <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: nowrap;">
-<a href="https://github.com/Vincentqyw/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater-24292e?logo=github&logoColor=white&style=flat-square" alt="GitHub"></a><a href="https://huggingface.co/Realcat/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Model-Realcat%2Fskywater__seg-ff9a00?style=flat-square" alt="HF Model"></a><a href="https://huggingface.co/datasets/Realcat/skywater" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Dataset-Realcat%2Fskywater-3b82f6?style=flat-square" alt="HF Dataset"></a>
+<a href="https://github.com/Vincentqyw/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater_seg-24292e?logo=github&logoColor=white&style=flat-square" alt="GitHub"></a><a href="https://huggingface.co/Realcat/skywater_seg" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Model-Realcat%2Fskywater__seg-ff9a00?style=flat-square" alt="HF Model"></a><a href="https://huggingface.co/datasets/Realcat/skywater" target="_blank"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Dataset-Realcat%2Fskywater-3b82f6?style=flat-square" alt="HF Dataset"></a>
 </div>
 
 **SegFormer MiT-B2** (24.7M) &nbsp;|&nbsp; 384×384 &nbsp;|&nbsp; mIoU 88.1% &nbsp;|&nbsp; ONNX · CoreML · PyTorch
