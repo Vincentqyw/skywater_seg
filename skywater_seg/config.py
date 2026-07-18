@@ -6,12 +6,10 @@ saving, and CLI-override merging — so ``!!python/tuple`` tags are gone
 and dot-notation overrides are type-coerced automatically.
 """
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from loguru import logger
 from omegaconf import OmegaConf, DictConfig
 
 

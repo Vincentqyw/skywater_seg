@@ -5,11 +5,10 @@ Utility functions: metrics, visualization, logging, device management.
 import random
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 
 # ============================================================

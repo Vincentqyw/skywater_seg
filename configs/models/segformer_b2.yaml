@@ -16,8 +16,8 @@ device: cuda
 data:
   image_dir: E:/datasets/ADEChallengeData2016/images
   mask_dir: E:/datasets/ADEChallengeData2016/annotations
-  train_split: ./data/ade20k_person/train.txt
-  val_split: ./data/ade20k_person/val.txt
+  train_split: ./data/ade20k/train.txt
+  val_split: ./data/ade20k/val.txt
   val_ratio: 0.15
   image_size: [384, 384]                           # Smaller for SegFormer speed (FLOPs -44%)
   num_classes: 4

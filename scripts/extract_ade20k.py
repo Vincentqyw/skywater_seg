@@ -21,8 +21,6 @@ Usage:
 import argparse
 import json
 import os
-import sys
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -379,13 +377,13 @@ def main():
     # ---- Summary ----
     total = sum(len(r) for r in all_results.values())
     logger.info(f"\n{'='*60}")
-    logger.info(f"✅ ADE20K extraction complete!")
+    logger.info("✅ ADE20K extraction complete!")
     logger.info(f"   Total images extracted: {total}")
     logger.info(f"   Output directory: {out_dir}")
     logger.info(f"   Images: {out_dir / 'images'}")
     logger.info(f"   Masks:  {out_dir / 'masks'}")
-    logger.info(f"\n   Ready for training:")
-    logger.info(f"   uv run python train.py --config configs/default.yaml \\")
+    logger.info("\n   Ready for training:")
+    logger.info("   uv run python train.py --config configs/default.yaml \\")
     logger.info(f"       --data.image_dir {out_dir / 'images'} \\")
     logger.info(f"       --data.mask_dir {out_dir / 'masks'} \\")
     logger.info(f"       --data.train_split {out_dir / 'train.txt'} \\")

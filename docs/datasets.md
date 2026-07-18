@@ -35,11 +35,11 @@ We provide pre-generated split files:
 
 ```bash
 # Generate the filtered splits (requires ADE20K path)
-uv run python scripts/prepare_ade20k_person.py
+uv run python scripts/prepare_ade20k.py
 
 # Output:
-#   data/ade20k_person/train.txt  (11,086 images)
-#   data/ade20k_person/val.txt    (1,111 images)
+#   data/ade20k/train.txt  (11,086 images)
+#   data/ade20k/val.txt    (1,111 images)
 ```
 
 These splits are also available on Hugging Face in

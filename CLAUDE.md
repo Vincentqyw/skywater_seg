@@ -36,7 +36,7 @@ uv run python scripts/auto_annotate.py -i data/images -o data/masks --gdino-mode
 uv run python train.py --config configs/models/segformer_b2.yaml                 # SegFormer B2 (best)
 uv run python train.py --config configs/models/convnext_dinov3.yaml              # ConvNeXt + DINOv3
 uv run python train.py --config configs/models/mobilenetv3_flatdir.yaml          # Quick start, custom data
-uv run python train.py --config configs/datasets/ade20k_person.yaml              # ADE20K filtered
+uv run python train.py --config configs/datasets/ade20k.yaml              # ADE20K filtered
 uv run python train.py --config configs/datasets/ade20k_full.yaml                # ADE20K full
 uv run python train.py --config configs/datasets/multi_dataset.yaml              # ADE20K + Cityscapes
 uv run python train.py --config configs/models/segformer_b2.yaml --train.batch_size=8 --train.epochs=50
@@ -65,7 +65,7 @@ uv run python -c "from skywater_seg import export_onnx, convert_onnx_fp16; ..."
 ### Data Preparation
 
 ```bash
-uv run python scripts/prepare_ade20k_person.py   # ADE20K → filtered splits
+uv run python scripts/prepare_ade20k.py   # ADE20K → filtered splits
 ```
 
 ### Tests & CI
@@ -108,7 +108,7 @@ Grounding DINO + SAM    →    DeepLabV3+ / ConvNeXt       →    ONNX / CoreML 
 ### Scripts (`scripts/`)
 
 - **`auto_annotate.py`**: Grounding DINO + SAM pipeline.
-- **`prepare_ade20k_person.py`**: Filter ADE20K for sky/water/person splits.
+- **`prepare_ade20k.py`**: Filter ADE20K for sky/water/person splits.
 - **`eval_segformer_b2.py`**: Per-class IoU/Dice/Precision/Recall on ADE20K val.
 - **`benchmark_full.py`**: ONNX export + latency + accuracy benchmark + figures.
 - **`gen_readme_figures.py`**: Paper-style 2×2 comparison figures.

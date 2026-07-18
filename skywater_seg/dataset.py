@@ -16,7 +16,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from skywater_seg.config import Config, DatasetConfig
+from skywater_seg.config import Config
 
 
 # ── Robust image/mask loading (PIL-based, avoid OpenCV JP2 decode issues) ──

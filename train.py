@@ -4,16 +4,16 @@ Training entry point for Sky-Water Segmentation.
 
 Usage:
   # Train with ADE20K config
-  python train.py --config configs/datasets/ade20k_person.yaml
+  python train.py --config configs/datasets/ade20k.yaml
 
   # Override config values (use = syntax OR space)
-  python train.py --config configs/datasets/ade20k_person.yaml --train.batch_size=16 --train.epochs=100
+  python train.py --config configs/datasets/ade20k.yaml --train.batch_size=16 --train.epochs=100
 
   # Or with spaces (auto-detected)
-  python train.py --config configs/datasets/ade20k_person.yaml --train.batch_size 16 --train.epochs 100
+  python train.py --config configs/datasets/ade20k.yaml --train.batch_size 16 --train.epochs 100
 
   # Resume from checkpoint
-  python train.py --config configs/datasets/ade20k_person.yaml --train.resume_from checkpoints/xxx/best_model.pth
+  python train.py --config configs/datasets/ade20k.yaml --train.resume_from checkpoints/xxx/best_model.pth
 """
 
 import sys

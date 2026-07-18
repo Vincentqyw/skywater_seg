@@ -135,7 +135,7 @@ skywater/
 │   └── utils.py           # Metrics, device, checkpoint, schedulers
 ├── scripts/
 │   ├── auto_annotate.py   # Grounding DINO + SAM annotation pipeline
-│   ├── prepare_ade20k_person.py  # ADE20K → sky/water/person splits
+│   ├── prepare_ade20k.py  # ADE20K → sky/water/person splits
 │   ├── eval_segformer_b2.py      # PyTorch metric evaluation
 │   ├── benchmark_full.py         # ONNX export + speed/accuracy benchmark
 │   └── gen_readme_figures.py     # Paper-style 2×2 comparison figures

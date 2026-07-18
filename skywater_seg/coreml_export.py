@@ -155,7 +155,6 @@ class CoreMLInference:
 
     def _warmup(self):
         """Warm up the model (first inference is always slower)."""
-        import torch
         dummy = np.random.randn(1, 3, 512, 512).astype(np.float32)
         try:
             self.model.predict({"input": dummy})

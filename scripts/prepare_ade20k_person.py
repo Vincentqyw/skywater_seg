@@ -11,10 +11,10 @@ Target classes:
   person: 13
 
 Usage:
-  python scripts/prepare_ade20k_person.py
+  python scripts/prepare_ade20k.py
 """
 
-import os, sys
+import os
 from pathlib import Path
 
 import cv2
@@ -23,7 +23,7 @@ from loguru import logger
 from tqdm import tqdm
 
 ADE_ROOT = Path("E:/datasets/ADEChallengeData2016")
-OUT_DIR = Path("data/ade20k_person")
+OUT_DIR = Path("data/ade20k")
 
 TARGET_CLASSES = {
     3,      # sky
@@ -93,7 +93,7 @@ def main():
     logger.info(f"val.txt:   {len(val_images)} images -> {val_path}")
 
     logger.info("[DONE] Ready for training!")
-    logger.info("  uv run python train.py --config configs/ade20k_person.yaml")
+    logger.info("  uv run python train.py --config configs/ade20k.yaml")
 
 
 if __name__ == "__main__":

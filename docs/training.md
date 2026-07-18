@@ -10,8 +10,8 @@ uv run python train.py --config configs/models/mobilenetv3_flatdir.yaml \
     --data.image_dir data/images --data.mask_dir data/masks
 
 # ADE20K filtered split (sky/water/person present)
-uv run python scripts/prepare_ade20k_person.py   # one-time: generate split files
-uv run python train.py --config configs/datasets/ade20k_person.yaml
+uv run python scripts/prepare_ade20k.py   # one-time: generate split files
+uv run python train.py --config configs/datasets/ade20k.yaml
 
 # High-quality model with ConvNeXt + DINOv3
 uv run python train.py --config configs/models/convnext_dinov3.yaml
@@ -53,7 +53,7 @@ class mapping.
 |--------|---------|-------|--------|----------|
 | `models/mobilenetv3_flatdir.yaml` | Custom flat dir | MobileNetV3-Large | ~5M | Quick start |
 | `datasets/ade20k_full.yaml` | ADE20K full | MobileNetV3-Large | ~5M | Cost-effective |
-| `datasets/ade20k_person.yaml` | ADE20K filtered | MobileNetV3-Large | ~5M | Filtered split |
+| `datasets/ade20k.yaml` | ADE20K filtered | MobileNetV3-Large | ~5M | Filtered split |
 | `models/convnext_dinov3.yaml` | ADE20K filtered | ConvNeXt-Tiny + DINOv3 | ~29M | High quality |
 | `datasets/multi_dataset.yaml` | ADE20K + Cityscapes | ConvNeXt-Tiny + DINOv3 | ~29M | Best generalization |
 | `models/segformer_b2.yaml` | ADE20K filtered | SegFormer MiT-B2 | ~25M | **Best quality** |

@@ -13,7 +13,6 @@ DINOv3-distilled weights: use `encoder_weights: dinov3` to load Meta's
 DINOv3-distilled ConvNeXt weights (e.g. convnext_tiny.dinov3_lvd1689m).
 """
 
-from typing import Optional
 
 import torch.nn as nn
 from loguru import logger

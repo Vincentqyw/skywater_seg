@@ -1,7 +1,6 @@
 """Tests for utility functions."""
 
 import numpy as np
-import pytest
 import torch
 
 from skywater_seg.utils import (

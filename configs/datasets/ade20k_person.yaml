@@ -1,8 +1,8 @@
 # ============================================================
 # ADE20K filtered split -- sky/water/person only (4-class)
 # ============================================================
-# Uses pre-generated train.txt / val.txt from prepare_ade20k_person.py.
-# Run `uv run python scripts/prepare_ade20k_person.py` first to generate.
+# Uses pre-generated train.txt / val.txt from prepare_ade20k.py.
+# Run `uv run python scripts/prepare_ade20k.py` first to generate.
 # ~11K training images, ~900 validation.
 
 experiment_name: skywater-person-ade20k
@@ -14,8 +14,8 @@ device: cuda
 data:
   image_dir: E:/datasets/ADEChallengeData2016/images
   mask_dir: E:/datasets/ADEChallengeData2016/annotations
-  train_split: ./data/ade20k_person/train.txt
-  val_split: ./data/ade20k_person/val.txt
+  train_split: ./data/ade20k/train.txt
+  val_split: ./data/ade20k/val.txt
   val_ratio: 0.15
   image_size: [512, 512]
   num_classes: 4                                     # 0=bg, 1=sky, 2=water, 3=person

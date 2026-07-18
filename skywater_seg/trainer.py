@@ -5,20 +5,16 @@ Logging:
   - loguru: console + file (training.log) with rich formatting
   - TensorBoard: metrics, gradients, images, weights
 
-Usage: python train.py --config configs/ade20k_person.yaml
+Usage: python train.py --config configs/ade20k.yaml
 """
 
-import os
 import sys
-import time
 import warnings
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from loguru import logger
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
@@ -31,7 +27,7 @@ warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimize
 from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
-from skywater_seg.visualization import colorize_mask, overlay_mask, tensor_to_image
+from skywater_seg.visualization import colorize_mask, tensor_to_image
 from skywater_seg.utils import (
     CLASS_COLORS_RGB,
     compute_dice,
@@ -41,7 +37,6 @@ from skywater_seg.utils import (
     create_scheduler,
     get_device,
     load_checkpoint,
-    mask_to_color,
     save_checkpoint,
     set_seed,
     tensor_to_image,

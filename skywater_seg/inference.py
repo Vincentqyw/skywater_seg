@@ -22,7 +22,7 @@ from loguru import logger
 
 from skywater_seg.config import Config
 from skywater_seg.model import create_model
-from skywater_seg.utils import class_colors_bgr, configure_backend, get_device
+from skywater_seg.utils import configure_backend, get_device
 
 
 class SegmentationInference:

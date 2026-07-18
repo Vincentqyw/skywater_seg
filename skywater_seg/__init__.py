@@ -1,4 +1,4 @@
-"""Sky-Water Segmentation Package — inference, ONNX export, and visualization."""
+"""SkyWater Segmentation Package — inference, ONNX export, and visualization."""
 
 __version__ = "0.3.0"
 
@@ -18,31 +18,25 @@ from skywater_seg.inference import (
     segment,
 )
 
-# ── Visualization (all viz functions live here) ────────────────────────
+# ── Visualization ─────────────────────────────────────────────────────
 from skywater_seg.visualization import (
-    # colour palette
     CLASS_COLORS_RGB,
     CLASS_NAMES,
     NUM_CLASSES,
     class_colors_bgr,
-    # mask ↔ colour
     colorize_mask,
     mask_to_color,
-    # overlays
     draw_overlay,
     overlay_mask,
-    # tensor utility
     tensor_to_image,
-    # composite grids
     make_comparison_grid,
     make_overlay_grid,
-    # matplotlib charts
     plot_speed_comparison,
     plot_iou_comparison,
     plot_summary_table,
 )
 
-# ── Utilities ──────────────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────────────
 from skywater_seg.utils import (
     compute_iou,
     compute_dice,
@@ -53,27 +47,33 @@ from skywater_seg.utils import (
 )
 
 __all__ = [
+    # config
+    "Config",
+    "get_default_config",
+    "cli_to_dotlist",
+    # model
+    "SkyWaterSegModel",
+    "create_model",
+    "get_model_info",
     # inference
     "SegmentationInference",
     "ONNXRuntimeInference",
     "export_onnx",
     "convert_onnx_fp16",
-    # visualization — colour
+    "load_model",
+    "segment",
+    # visualization
     "CLASS_COLORS_RGB",
     "CLASS_NAMES",
     "NUM_CLASSES",
     "class_colors_bgr",
-    # visualization — mask
     "colorize_mask",
     "mask_to_color",
-    "tensor_to_image",
-    # visualization — overlay
     "draw_overlay",
     "overlay_mask",
-    # visualization — grids
+    "tensor_to_image",
     "make_comparison_grid",
     "make_overlay_grid",
-    # visualization — charts
     "plot_speed_comparison",
     "plot_iou_comparison",
     "plot_summary_table",

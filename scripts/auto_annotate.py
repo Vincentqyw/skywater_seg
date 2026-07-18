@@ -38,8 +38,6 @@ License: MIT
 
 import argparse
 import json
-import os
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -342,7 +340,7 @@ class SAMMaskGenerator:
         except ImportError:
             raise ImportError("huggingface_hub is required: pip install huggingface_hub")
 
-        logger.info(f"  Downloading MobileSAM checkpoint (~9MB)...")
+        logger.info("  Downloading MobileSAM checkpoint (~9MB)...")
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
@@ -365,7 +363,6 @@ class SAMMaskGenerator:
             except Exception:
                 # Last resort: load with standard build_sam
                 from segment_anything import build_sam
-                from segment_anything.modeling import ImageEncoderViT, MaskDecoder, PromptEncoder
                 sam = build_sam(checkpoint=checkpoint_path)
             predictor_cls = SamPredictor
 
@@ -389,7 +386,7 @@ class SAMMaskGenerator:
         except ImportError:
             raise ImportError("huggingface_hub is required: pip install huggingface_hub")
 
-        logger.info(f"  Downloading EfficientSAM checkpoint (~15MB)...")
+        logger.info("  Downloading EfficientSAM checkpoint (~15MB)...")
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
@@ -399,8 +396,6 @@ class SAMMaskGenerator:
 
         # EfficientSAM exports as TorchScript; use custom wrapper
         try:
-            from segment_anything import SamPredictor
-            from segment_anything.modeling import Sam
 
             # Load the TorchScript model as the image encoder
             efficient_encoder = torch.jit.load(checkpoint_path)
@@ -415,7 +410,7 @@ class SAMMaskGenerator:
 
             # We still need SAM's prompt encoder + mask decoder
             # Load a lightweight SAM for the decoder parts
-            from segment_anything import sam_model_registry, SamPredictor
+            from segment_anything import sam_model_registry
             from huggingface_hub import hf_hub_download
 
             vit_b_info = SAM_MODELS["vit_b"]
@@ -1145,7 +1140,7 @@ Examples:
             logger.info(f"Visualization saved: {vis_file}")
 
         # Print stats
-        logger.info(f"\nDetection stats:")
+        logger.info("\nDetection stats:")
         for det in info.get("detections", []):
             logger.info(f"  [{det['class']}] score={det['score']:.3f}")
         logger.info(f"Mask stats: {json.dumps(info['mask_stats'], indent=2)}")
