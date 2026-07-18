@@ -41,8 +41,7 @@ class TestColorizeMask:
     def test_all_classes_colorized_differently(self):
         mask = np.array([[0, 1], [2, 3]], dtype=np.uint8)
         rgb = colorize_mask(mask)
-        colors = [tuple(rgb[0, 0]), tuple(rgb[0, 1]),
-                   tuple(rgb[1, 0]), tuple(rgb[1, 1])]
+        colors = [tuple(rgb[0, 0]), tuple(rgb[0, 1]), tuple(rgb[1, 0]), tuple(rgb[1, 1])]
         assert len(set(colors)) == 4
 
 
@@ -80,16 +79,20 @@ class TestPlotFunctionsNoMpl:
     matplotlib, not some cryptic error."""
 
     def test_plot_speed_needs_matplotlib(self, monkeypatch):
-        import skywater_seg.visualization as viz
         # Temp remove matplotlib
         import sys
+
+        import skywater_seg.visualization as viz
+
         monkeypatch.setitem(sys.modules, "matplotlib", None)
         with pytest.raises(ImportError, match="matplotlib"):
             viz.plot_speed_comparison({}, "/tmp/test.png")
 
     def test_plot_iou_needs_matplotlib(self, monkeypatch):
-        import skywater_seg.visualization as viz
         import sys
+
+        import skywater_seg.visualization as viz
+
         monkeypatch.setitem(sys.modules, "matplotlib", None)
         with pytest.raises(ImportError, match="matplotlib"):
             viz.plot_iou_comparison({}, "/tmp/test.png")

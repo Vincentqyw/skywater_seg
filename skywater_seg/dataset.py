@@ -18,13 +18,14 @@ from torch.utils.data import Dataset
 
 from skywater_seg.config import Config
 
-
 # ── Robust image/mask loading (PIL-based, avoid OpenCV JP2 decode issues) ──
+
 
 def _load_image_robust(path: str) -> np.ndarray:
     """Load image as RGB numpy array using PIL. Returns None on failure."""
     try:
         from PIL import Image
+
         return np.array(Image.open(path).convert("RGB"), dtype=np.uint8)
     except Exception:
         return None
@@ -34,12 +35,14 @@ def _load_mask_robust(path: str) -> np.ndarray:
     """Load mask as grayscale numpy array using PIL. Returns None on failure."""
     try:
         from PIL import Image
+
         return np.array(Image.open(path), dtype=np.uint8)
     except Exception:
         return None
 
 
 # ── Cityscapes-specific helpers ──
+
 
 def _find_cityscapes_pairs(image_dir: str, split: str, mask_dir: str) -> List[Tuple[str, str]]:
     """Scan Cityscapes directory structure and return (image_path, mask_path) pairs."""
@@ -76,6 +79,7 @@ def _find_cityscapes_pairs(image_dir: str, split: str, mask_dir: str) -> List[Tu
 
 
 # ── Single Dataset ──
+
 
 class SkyWaterDataset(Dataset):
     """Dataset for sky/water/person segmentation.
@@ -120,9 +124,11 @@ class SkyWaterDataset(Dataset):
             self.images = file_list
             self._pairs = None
             self._masks = {}
-        elif (Path(image_dir) / split).exists() or \
-             (Path(image_dir) / f"{split}ing").exists() or \
-             (Path(image_dir) / ("" if split != "val" else "validation")).exists():
+        elif (
+            (Path(image_dir) / split).exists()
+            or (Path(image_dir) / f"{split}ing").exists()
+            or (Path(image_dir) / ("" if split != "val" else "validation")).exists()
+        ):
             # Subdirectory mode: handles "train"/"val" (Cityscapes),
             # "training"/"validation" (ADE20K)
             candidates = [split]
@@ -137,19 +143,20 @@ class SkyWaterDataset(Dataset):
             else:
                 sub_dir = Path(image_dir) / split
             extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
-            self.images = sorted([
-                str(f.relative_to(Path(image_dir)))  # e.g. "training/ADE_001.jpg"
-                for f in sub_dir.rglob("*")
-                if f.suffix.lower() in extensions
-            ])
+            self.images = sorted(
+                [
+                    str(f.relative_to(Path(image_dir)))  # e.g. "training/ADE_001.jpg"
+                    for f in sub_dir.rglob("*")
+                    if f.suffix.lower() in extensions
+                ]
+            )
             self._pairs = None
             self._masks = {}
         else:
             extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
-            self.images = sorted([
-                f.name for f in self.image_dir.glob("*")
-                if f.suffix.lower() in extensions
-            ])
+            self.images = sorted(
+                [f.name for f in self.image_dir.glob("*") if f.suffix.lower() in extensions]
+            )
             self._pairs = None
             self._masks = {}
 
@@ -164,6 +171,7 @@ class SkyWaterDataset(Dataset):
 
     def _build_transforms(self, cfg: "DataConfig"):
         import albumentations as A
+
         h, w = self.image_size
         transforms = [A.Resize(height=h, width=w)]
         if cfg.horizontal_flip > 0:
@@ -172,9 +180,15 @@ class SkyWaterDataset(Dataset):
             transforms.append(A.VerticalFlip(p=cfg.vertical_flip))
         if cfg.rotation > 0:
             transforms.append(A.Rotate(limit=cfg.rotation, border_mode=cv2.BORDER_CONSTANT, p=0.5))
-        transforms.append(A.ColorJitter(
-            brightness=cfg.brightness, contrast=cfg.contrast,
-            saturation=cfg.saturation, hue=cfg.hue, p=0.5))
+        transforms.append(
+            A.ColorJitter(
+                brightness=cfg.brightness,
+                contrast=cfg.contrast,
+                saturation=cfg.saturation,
+                hue=cfg.hue,
+                p=0.5,
+            )
+        )
         transforms.append(A.Normalize(mean=cfg.mean, std=cfg.std))
         return A.Compose(transforms)
 
@@ -188,9 +202,11 @@ class SkyWaterDataset(Dataset):
         image = _load_image_robust(image_path)
         if image is None:
             h, w = self.image_size
-            return {"image": torch.zeros((3, h, w), dtype=torch.float32),
-                    "mask": torch.zeros((h, w), dtype=torch.long),
-                    "name": Path(image_path).name}
+            return {
+                "image": torch.zeros((3, h, w), dtype=torch.float32),
+                "mask": torch.zeros((h, w), dtype=torch.long),
+                "name": Path(image_path).name,
+            }
 
         # Load mask
         mask = self._load_mask(idx)
@@ -272,6 +288,7 @@ class SkyWaterDataset(Dataset):
 
 # ── Multi-Dataset Wrapper ──
 
+
 class MultiDataset(Dataset):
     """Concatenates multiple SkyWaterDataset instances for mixed training.
 
@@ -298,7 +315,9 @@ class MultiDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         # Weighted random sampling if weights differ
         if len(set(self.weights)) > 1:
-            ds_idx = np.random.choice(len(self.datasets), p=np.array(self.weights) / sum(self.weights))
+            ds_idx = np.random.choice(
+                len(self.datasets), p=np.array(self.weights) / sum(self.weights)
+            )
             local_idx = np.random.randint(0, self._lengths[ds_idx])
         else:
             # Uniform: find which dataset owns this index
@@ -322,8 +341,10 @@ class MultiDataset(Dataset):
 
 # ── Dataloader Factory ──
 
-def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
-                                                   torch.utils.data.DataLoader]:
+
+def create_dataloaders(
+    config: Config,
+) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Create train and validation dataloaders from config.
 
     Supports:
@@ -341,7 +362,9 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
         val_datasets = []
 
         for ds_cfg in config.datasets:
-            aug = ds_cfg.augmentation if ds_cfg.augmentation is not None else config.data.augmentation
+            aug = (
+                ds_cfg.augmentation if ds_cfg.augmentation is not None else config.data.augmentation
+            )
 
             train_ds = SkyWaterDataset(
                 image_dir=ds_cfg.image_dir,
@@ -379,7 +402,8 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
             val_files = [line.strip() for line in f if line.strip()]
 
         train_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
+            image_dir=config.data.image_dir,
+            mask_dir=config.data.mask_dir,
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
             augmentation=config.data.augmentation,
@@ -390,10 +414,12 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
             split="train",
         )
         val_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
+            image_dir=config.data.image_dir,
+            mask_dir=config.data.mask_dir,
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
-            augmentation=False, config=None,
+            augmentation=False,
+            config=None,
             file_list=val_files,
             class_mapping=config.data.class_mapping,
             cityscapes=config.data.cityscapes,
@@ -418,7 +444,8 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
             mask_dir=str(Path(config.data.mask_dir) / "validation"),
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
-            augmentation=False, config=None,
+            augmentation=False,
+            config=None,
             class_mapping=config.data.class_mapping,
             cityscapes=config.data.cityscapes,
             split="val",
@@ -427,19 +454,23 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
     # ── Single dataset: Mode 3 (random split) ──
     else:
         full_dataset = SkyWaterDataset(
-            image_dir=config.data.image_dir, mask_dir=config.data.mask_dir,
+            image_dir=config.data.image_dir,
+            mask_dir=config.data.mask_dir,
             image_size=tuple(config.data.image_size),
             num_classes=config.data.num_classes,
-            augmentation=False, config=None,
+            augmentation=False,
+            config=None,
             class_mapping=config.data.class_mapping,
             cityscapes=config.data.cityscapes,
             split="train",
         )
         from torch.utils.data import random_split
+
         n_val = max(1, int(len(full_dataset) * config.data.val_ratio))
         n_train = len(full_dataset) - n_val
         train_base, val_dataset = random_split(
-            full_dataset, [n_train, n_val],
+            full_dataset,
+            [n_train, n_val],
             generator=torch.Generator().manual_seed(config.seed),
         )
         train_dataset = _AugmentedWrapper(train_base, full_dataset, config.data)
@@ -448,20 +479,27 @@ def create_dataloaders(config: Config) -> Tuple[torch.utils.data.DataLoader,
     pin_memory = config.train.pin_memory and not torch.backends.mps.is_available()
 
     train_loader = DataLoader(
-        train_dataset, batch_size=config.train.batch_size,
-        shuffle=True, num_workers=config.train.num_workers,
-        pin_memory=pin_memory, drop_last=True,
+        train_dataset,
+        batch_size=config.train.batch_size,
+        shuffle=True,
+        num_workers=config.train.num_workers,
+        pin_memory=pin_memory,
+        drop_last=True,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=config.train.batch_size,
-        shuffle=False, num_workers=config.train.num_workers,
-        pin_memory=pin_memory, drop_last=False,
+        val_dataset,
+        batch_size=config.train.batch_size,
+        shuffle=False,
+        num_workers=config.train.num_workers,
+        pin_memory=pin_memory,
+        drop_last=False,
     )
 
     return train_loader, val_loader
 
 
 # ── Internal helpers ──
+
 
 class _AugmentedWrapper(Dataset):
     """Wraps a random_split subset with augmentation enabled."""
@@ -486,9 +524,11 @@ class _AugmentedWrapper(Dataset):
         image = _load_image_robust(str(image_path))
         if image is None:
             h, w = self.image_size
-            return {"image": torch.zeros((3, h, w), dtype=torch.float32),
-                    "mask": torch.zeros((h, w), dtype=torch.long),
-                    "name": Path(image_path).name}
+            return {
+                "image": torch.zeros((3, h, w), dtype=torch.float32),
+                "mask": torch.zeros((h, w), dtype=torch.long),
+                "name": Path(image_path).name,
+            }
 
         mask = self.base._load_mask(original_idx)
         if self.base.class_mapping is not None:

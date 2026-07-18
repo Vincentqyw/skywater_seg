@@ -14,7 +14,6 @@ from typing import Dict, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 import torch
-
 from loguru import logger
 
 # ── Shared colour palette (single source of truth) ─────────────────────
@@ -25,10 +24,10 @@ CLASS_NAMES = ["Background", "Sky", "Water", "Person"]
 NUM_CLASSES = len(CLASS_NAMES)
 
 CLASS_COLORS_RGB = {
-    0: (0, 0, 0),          # background: black
-    1: (255, 140, 0),      # sky: orange
-    2: (0, 200, 255),      # water: cyan
-    3: (255, 60, 60),      # person: red
+    0: (0, 0, 0),  # background: black
+    1: (255, 140, 0),  # sky: orange
+    2: (0, 200, 255),  # water: cyan
+    3: (255, 60, 60),  # person: red
 }
 """RGB colour palette keyed by class index."""
 
@@ -44,6 +43,7 @@ def class_colors_bgr() -> Dict[int, Tuple[int, int, int]]:
 # ═══════════════════════════════════════════════════════════════════════
 # Mask ↔ colour conversion
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def overlay_mask(
     image: Union[str, np.ndarray],
@@ -98,7 +98,9 @@ def overlay_mask(
                 continue
             binary = (mask == cls_id).astype(np.uint8) * 255
             contours, _ = cv2.findContours(
-                binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+                binary,
+                cv2.RETR_EXTERNAL,
+                cv2.CHAIN_APPROX_SIMPLE,
             )
             cv2.drawContours(vis, contours, -1, color, contour_thickness)
 
@@ -108,6 +110,7 @@ def overlay_mask(
 # ═══════════════════════════════════════════════════════════════════════
 # Composite grids
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def make_comparison_grid(
     samples: List[dict],
@@ -223,7 +226,7 @@ def make_overlay_grid(
         axes[row, 3].set_title(f"{titles[3]}\n{s.get('label_b', 'B')}", fontsize=10)
         axes[row, 3].axis("off")
 
-        diff = (s["pred_a"] != s["pred_b"])
+        diff = s["pred_a"] != s["pred_b"]
         dm = np.zeros_like(s["image"])
         dm[diff] = [255, 60, 60]
         axes[row, 4].imshow(dm)
@@ -242,6 +245,7 @@ def make_overlay_grid(
 # ═══════════════════════════════════════════════════════════════════════
 # Plot / chart functions (require matplotlib)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def plot_speed_comparison(
     latencies: Dict[str, float],
@@ -269,8 +273,9 @@ def plot_speed_comparison(
     palette = ["#6baed6", "#fd8d3c", "#31a354", "#756bb1", "#d62728"]
 
     fig, ax = plt.subplots(figsize=(11, 5.5))
-    bars = ax.barh(names, vals, color=palette[:len(names)], edgecolor="white",
-                   linewidth=1.0, height=0.55)
+    bars = ax.barh(
+        names, vals, color=palette[: len(names)], edgecolor="white", linewidth=1.0, height=0.55
+    )
 
     best = min(vals)
     ax.axvline(x=best, color="#d62728", linestyle="--", linewidth=1.2, alpha=0.7)
@@ -282,10 +287,14 @@ def plot_speed_comparison(
             label += f"  ({speedup:.2f}×)"
         else:
             label += "  ← fastest"
-        ax.text(bar.get_width() + max(vals) * 0.01,
-                bar.get_y() + bar.get_height() / 2,
-                label, va="center", fontsize=11,
-                fontweight="bold" if v == best else "normal")
+        ax.text(
+            bar.get_width() + max(vals) * 0.01,
+            bar.get_y() + bar.get_height() / 2,
+            label,
+            va="center",
+            fontsize=11,
+            fontweight="bold" if v == best else "normal",
+        )
 
     ax.set_xlabel("Latency (ms) — lower is better", fontsize=13)
     ax.set_title(title, fontsize=14, fontweight="bold")
@@ -336,13 +345,24 @@ def plot_iou_comparison(
 
     for i, meth in enumerate(methods):
         ious = [results[meth].get(f"iou_{cn}", 0) for cn in class_names]
-        bars = ax.bar(x + i * w, ious, w, label=meth,
-                      color=palette[i % len(palette)],
-                      edgecolor="white", linewidth=0.4)
+        bars = ax.bar(
+            x + i * w,
+            ious,
+            w,
+            label=meth,
+            color=palette[i % len(palette)],
+            edgecolor="white",
+            linewidth=0.4,
+        )
         for bar, iou in zip(bars, ious):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + 0.8,
-                    f"{iou:.1f}", ha="center", fontsize=8, rotation=90)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.8,
+                f"{iou:.1f}",
+                ha="center",
+                fontsize=8,
+                rotation=90,
+            )
 
     ax.set_ylabel("IoU (%)", fontsize=13)
     ax.set_title(title, fontsize=14, fontweight="bold")
@@ -383,10 +403,13 @@ def plot_summary_table(
 
     if rows is None:
         rows = [
-            ("mIoU (fg)", "miou_foreground"), ("mIoU (all)", "miou_all"),
+            ("mIoU (fg)", "miou_foreground"),
+            ("mIoU (all)", "miou_all"),
             ("Pixel Acc.", "pixel_accuracy"),
-            ("IoU Sky", "iou_Sky"), ("IoU Water", "iou_Water"),
-            ("IoU Person", "iou_Person"), ("Latency", "latency_ms"),
+            ("IoU Sky", "iou_Sky"),
+            ("IoU Water", "iou_Water"),
+            ("IoU Person", "iou_Person"),
+            ("Latency", "latency_ms"),
         ]
 
     methods = list(results.keys())
@@ -394,16 +417,22 @@ def plot_summary_table(
 
     cell_text = []
     for _, key in rows:
-        cell_text.append([
-            f"{results[m].get(key, 0):.1f}{' ms' if key == 'latency_ms' else '%'}"
-            for m in methods
-        ])
+        cell_text.append(
+            [
+                f"{results[m].get(key, 0):.1f}{' ms' if key == 'latency_ms' else '%'}"
+                for m in methods
+            ]
+        )
 
     fig, ax = plt.subplots(figsize=(12, 3.5))
     ax.axis("off")
     table = ax.table(
-        cellText=cell_text, rowLabels=row_labels, colLabels=methods,
-        cellLoc="center", rowLoc="center", loc="center",
+        cellText=cell_text,
+        rowLabels=row_labels,
+        colLabels=methods,
+        cellLoc="center",
+        rowLoc="center",
+        loc="center",
     )
     table.auto_set_font_size(False)
     table.set_fontsize(10)
@@ -425,6 +454,7 @@ def plot_summary_table(
 # Tensor utilities (moved from utils.py)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def tensor_to_image(
     tensor: torch.Tensor,
     mean: Optional[List[float]] = None,
@@ -442,9 +472,11 @@ def tensor_to_image(
     """
     if mean is None:
         from skywater_seg.inference import ONNXRuntimeInference
+
         mean = ONNXRuntimeInference.MEAN
     if std is None:
         from skywater_seg.inference import ONNXRuntimeInference
+
         std = ONNXRuntimeInference.STD
 
     if tensor.dim() == 4:
@@ -487,6 +519,8 @@ def mask_to_color(mask: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
 
 
 colorize_mask = mask_to_color  # alias -- both convert mask to RGB
+
+
 def draw_overlay(
     image: Union[str, np.ndarray],
     mask: np.ndarray,
@@ -505,19 +539,18 @@ def draw_overlay(
     Returns:
         BGR numpy array suitable for ``cv2.imwrite`` / ``cv2.imshow``.
     """
-    return overlay_mask(image, mask, alpha=alpha,
-                        draw_contours=True, contour_thickness=2)
+    return overlay_mask(image, mask, alpha=alpha, draw_contours=True, contour_thickness=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Internal helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _ensure_matplotlib():
     try:
         import matplotlib  # noqa: F401
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plot functions. "
-            "Install with: pip install matplotlib"
+            "matplotlib is required for plot functions. Install with: pip install matplotlib"
         )

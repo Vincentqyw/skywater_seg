@@ -30,10 +30,15 @@ from skywater_seg.trainer import train
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Train sky/water segmentation model")
-    parser.add_argument("--config", "-c", type=str,
-                        default="configs/models/mobilenetv3_flatdir.yaml",
-                        help="Path to YAML config file")
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="configs/models/mobilenetv3_flatdir.yaml",
+        help="Path to YAML config file",
+    )
     args, unknown = parser.parse_known_args()
 
     # Build OmegaConf structured schema from defaults

@@ -10,10 +10,10 @@ from typing import Dict, Optional
 import numpy as np
 import torch
 
-
 # ============================================================
 # Metrics
 # ============================================================
+
 
 def compute_iou(
     pred: torch.Tensor,
@@ -33,7 +33,7 @@ def compute_iou(
         Dict with "iou_class_X" and "miou" (mean IoU over foreground classes)
     """
     ious = {}
-    mask = (target != ignore_index)
+    mask = target != ignore_index
 
     for c in range(num_classes):
         pred_c = (pred == c) & mask
@@ -48,8 +48,11 @@ def compute_iou(
             ious[f"iou_class_{c}"] = float("nan")  # class absent from batch
 
     # Mean IoU over foreground classes (skip NaN = absent from batch)
-    fg_vals = [v for c, v in ious.items()
-               if c.startswith("iou_class_") and c != "iou_class_0" and not np.isnan(v)]
+    fg_vals = [
+        v
+        for c, v in ious.items()
+        if c.startswith("iou_class_") and c != "iou_class_0" and not np.isnan(v)
+    ]
     ious["miou"] = round(np.mean(fg_vals) if fg_vals else 0.0, 4)
 
     return ious
@@ -63,7 +66,7 @@ def compute_dice(
 ) -> Dict[str, float]:
     """Compute per-class and mean Dice coefficient."""
     dices = {}
-    mask = (target != ignore_index)
+    mask = target != ignore_index
 
     for c in range(num_classes):
         pred_c = (pred == c) & mask
@@ -77,8 +80,11 @@ def compute_dice(
         else:
             dices[f"dice_class_{c}"] = float("nan")
 
-    fg_vals = [v for c, v in dices.items()
-               if c.startswith("dice_class_") and c != "dice_class_0" and not np.isnan(v)]
+    fg_vals = [
+        v
+        for c, v in dices.items()
+        if c.startswith("dice_class_") and c != "dice_class_0" and not np.isnan(v)
+    ]
     dices["mdice"] = round(np.mean(fg_vals) if fg_vals else 0.0, 4)
 
     return dices
@@ -90,7 +96,7 @@ def compute_pixel_accuracy(
     ignore_index: int = 255,
 ) -> float:
     """Compute pixel-wise accuracy (ignoring the ignore_index)."""
-    mask = (target != ignore_index)
+    mask = target != ignore_index
     correct = ((pred == target) & mask).sum().float()
     total = mask.sum().float()
     return float((correct / (total + 1e-6)).item())
@@ -109,10 +115,10 @@ from skywater_seg.visualization import (  # noqa: E402, F401
     tensor_to_image,
 )
 
-
 # ============================================================
 # Device management
 # ============================================================
+
 
 def get_device(device_str: str = "cuda") -> torch.device:
     """Get the best available device."""
@@ -155,6 +161,7 @@ def to_device(data, device: torch.device):
 # Reproducibility
 # ============================================================
 
+
 def set_seed(seed: int = 42):
     """Set random seeds for reproducibility."""
     random.seed(seed)
@@ -168,6 +175,7 @@ def set_seed(seed: int = 42):
 # ============================================================
 # Checkpoint management
 # ============================================================
+
 
 def save_checkpoint(
     model: torch.nn.Module,
@@ -223,6 +231,7 @@ def load_checkpoint(
 # Learning rate schedulers
 # ============================================================
 
+
 def create_scheduler(optimizer, config, steps_per_epoch: int):
     """Create learning rate scheduler from config."""
     total_steps = steps_per_epoch * config.train.epochs
@@ -230,7 +239,8 @@ def create_scheduler(optimizer, config, steps_per_epoch: int):
 
     if config.train.scheduler == "cosine":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=total_steps - warmup_steps,
+            optimizer,
+            T_max=total_steps - warmup_steps,
             eta_min=config.train.lr_min,
         )
     elif config.train.scheduler == "poly":
@@ -241,11 +251,16 @@ def create_scheduler(optimizer, config, steps_per_epoch: int):
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda_poly)
     elif config.train.scheduler == "step":
         scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=30, gamma=0.1,
+            optimizer,
+            step_size=30,
+            gamma=0.1,
         )
     elif config.train.scheduler == "plateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="max", factor=0.5, patience=10,
+            optimizer,
+            mode="max",
+            factor=0.5,
+            patience=10,
         )
     else:
         raise ValueError(f"Unknown scheduler: {config.train.scheduler}")

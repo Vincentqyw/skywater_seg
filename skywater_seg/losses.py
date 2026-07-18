@@ -53,10 +53,12 @@ class DiceLoss(nn.Module):
 
             # One-hot encode target, handle ignore_index
             num_classes = pred.shape[1]
-            mask = (target != self.ignore_index)
-            target_one_hot = F.one_hot(
-                torch.clamp(target, 0, num_classes - 1), num_classes
-            ).permute(0, 3, 1, 2).float()  # (B, C, H, W)
+            mask = target != self.ignore_index
+            target_one_hot = (
+                F.one_hot(torch.clamp(target, 0, num_classes - 1), num_classes)
+                .permute(0, 3, 1, 2)
+                .float()
+            )  # (B, C, H, W)
 
             # Apply mask
             mask = mask.unsqueeze(1).float()  # (B, 1, H, W)
@@ -112,7 +114,7 @@ class FocalLoss(nn.Module):
         target_flat = target.reshape(-1)
 
         # Ignore index
-        mask = (target_flat != self.ignore_index)
+        mask = target_flat != self.ignore_index
         logp = logp[mask]
         target_flat = target_flat[mask]
 
@@ -136,10 +138,12 @@ class JaccardLoss(nn.Module):
         num_classes = pred.shape[1]
 
         # One-hot target
-        mask = (target != self.ignore_index)
-        target_oh = F.one_hot(
-            torch.clamp(target, 0, num_classes - 1), num_classes
-        ).permute(0, 3, 1, 2).float()
+        mask = target != self.ignore_index
+        target_oh = (
+            F.one_hot(torch.clamp(target, 0, num_classes - 1), num_classes)
+            .permute(0, 3, 1, 2)
+            .float()
+        )
         mask = mask.unsqueeze(1).float()
 
         pred = pred * mask
@@ -179,12 +183,8 @@ class CombinedLoss(nn.Module):
         if class_weights is not None:
             class_weights = torch.tensor(class_weights).float()
 
-        self.ce_loss = nn.CrossEntropyLoss(
-            weight=class_weights, ignore_index=ignore_index
-        )
-        self.dice_loss = DiceLoss(
-            mode="multiclass", smooth=smooth, ignore_index=ignore_index
-        )
+        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights, ignore_index=ignore_index)
+        self.dice_loss = DiceLoss(mode="multiclass", smooth=smooth, ignore_index=ignore_index)
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         ce = self.ce_loss(pred, target)
@@ -206,9 +206,7 @@ def get_loss(config) -> nn.Module:
             ignore_index=config.data.ignore_index,
         )
     elif loss_name == "dice":
-        return DiceLoss(
-            mode="multiclass", ignore_index=config.data.ignore_index
-        )
+        return DiceLoss(mode="multiclass", ignore_index=config.data.ignore_index)
     elif loss_name == "focal":
         return FocalLoss(ignore_index=config.data.ignore_index)
     elif loss_name == "jaccard":

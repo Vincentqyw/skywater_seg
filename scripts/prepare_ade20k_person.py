@@ -26,15 +26,15 @@ ADE_ROOT = Path("E:/datasets/ADEChallengeData2016")
 OUT_DIR = Path("data/ade20k")
 
 TARGET_CLASSES = {
-    3,      # sky
-    13,     # person
-    22,     # water
-    27,     # sea
-    61,     # river
-    105,    # fountain
-    110,    # swimming pool
-    114,    # waterfall
-    129,    # lake
+    3,  # sky
+    13,  # person
+    22,  # water
+    27,  # sea
+    61,  # river
+    105,  # fountain
+    110,  # swimming pool
+    114,  # waterfall
+    129,  # lake
 }
 
 
@@ -68,8 +68,10 @@ def filter_split(split_name: str) -> list:
         else:
             no_target += 1
 
-    logger.info(f"  {split_name}: {len(valid)}/{total} images have targets "
-                f"({len(valid)/total*100:.1f}%), skipped {no_target}")
+    logger.info(
+        f"  {split_name}: {len(valid)}/{total} images have targets "
+        f"({len(valid) / total * 100:.1f}%), skipped {no_target}"
+    )
     return valid
 
 

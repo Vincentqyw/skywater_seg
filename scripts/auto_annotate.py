@@ -42,14 +42,12 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from loguru import logger
-
 import cv2
 import numpy as np
 import torch
+from loguru import logger
 from PIL import Image
 from tqdm import tqdm
-
 
 # ============================================================
 # Default class definitions
@@ -117,6 +115,7 @@ SAM_MODELS = {
 # Grounding DINO Detector
 # ============================================================
 
+
 class GroundingDINODetector:
     """Open-vocabulary object detection via Grounding DINO.
 
@@ -124,8 +123,7 @@ class GroundingDINODetector:
     Supports FP16 precision for ~2x speedup on MPS / CUDA.
     """
 
-    def __init__(self, model_size: str = "base", device: str = "cuda",
-                 precision: str = "fp32"):
+    def __init__(self, model_size: str = "base", device: str = "cuda", precision: str = "fp32"):
         if torch.cuda.is_available() and device == "cuda":
             self.device = "cuda"
         elif torch.backends.mps.is_available() and device == "cuda":
@@ -138,7 +136,7 @@ class GroundingDINODetector:
             logger.warning("  ⚠️  FP16 not supported on CPU, falling back to FP32")
             self.precision = "fp32"
 
-        self._use_amp = (self.precision == "fp16" and self.device in ("cuda", "mps"))
+        self._use_amp = self.precision == "fp16" and self.device in ("cuda", "mps")
 
         if model_size not in GROUNDING_DINO_MODELS:
             raise ValueError(
@@ -149,11 +147,10 @@ class GroundingDINODetector:
         model_id = GROUNDING_DINO_MODELS[model_size]
 
         try:
-            from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+            from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
         except ImportError:
             raise ImportError(
-                "transformers>=4.40.0 is required. Install with: "
-                "pip install transformers>=4.40.0"
+                "transformers>=4.40.0 is required. Install with: pip install transformers>=4.40.0"
             )
 
         logger.info(f"  Loading Grounding DINO ({model_size}, {self.precision}) from {model_id}...")
@@ -195,16 +192,18 @@ class GroundingDINODetector:
 
         # Move to device, handling nested dicts
         inputs = {
-            k: v.to(self.device) if isinstance(v, torch.Tensor) else v
-            for k, v in inputs.items()
+            k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()
         }
 
         with torch.no_grad():
             # FP16 autocast for ~2x speedup on MPS/CUDA
             from contextlib import nullcontext
-            amp_ctx = torch.autocast(
-                device_type=self.device, dtype=torch.float16
-            ) if self._use_amp else nullcontext()
+
+            amp_ctx = (
+                torch.autocast(device_type=self.device, dtype=torch.float16)
+                if self._use_amp
+                else nullcontext()
+            )
             with amp_ctx:
                 outputs = self.model(**inputs)
 
@@ -222,11 +221,13 @@ class GroundingDINODetector:
             results.get("scores", []),
             results.get("labels", []),
         ):
-            detections.append({
-                "box": [float(c) for c in box],  # [x1, y1, x2, y2]
-                "score": float(score),
-                "label": str(label).strip().lower(),
-            })
+            detections.append(
+                {
+                    "box": [float(c) for c in box],  # [x1, y1, x2, y2]
+                    "score": float(score),
+                    "label": str(label).strip().lower(),
+                }
+            )
 
         return detections
 
@@ -261,8 +262,7 @@ class SAMMaskGenerator:
       - FP16 precision for ~2x additional speedup on MPS/CUDA
     """
 
-    def __init__(self, model_type: str = "vit_h", device: str = "cuda",
-                 precision: str = "fp32"):
+    def __init__(self, model_type: str = "vit_h", device: str = "cuda", precision: str = "fp32"):
         if torch.cuda.is_available() and device == "cuda":
             self.device = "cuda"
         elif torch.backends.mps.is_available() and device == "cuda":
@@ -275,12 +275,11 @@ class SAMMaskGenerator:
             logger.warning("  ⚠️  FP16 not supported on CPU, falling back to FP32")
             self.precision = "fp32"
 
-        self._use_amp = (self.precision == "fp16" and self.device in ("cuda", "mps"))
+        self._use_amp = self.precision == "fp16" and self.device in ("cuda", "mps")
 
         if model_type not in SAM_MODELS_FAST:
             raise ValueError(
-                f"Unknown SAM model '{model_type}'. "
-                f"Choose from: {list(SAM_MODELS_FAST.keys())}"
+                f"Unknown SAM model '{model_type}'. Choose from: {list(SAM_MODELS_FAST.keys())}"
             )
 
         self.model_type = model_type
@@ -298,21 +297,21 @@ class SAMMaskGenerator:
 
         # ---- Standard SAM path ----
         try:
-            from segment_anything import sam_model_registry, SamPredictor
+            from segment_anything import SamPredictor, sam_model_registry
         except ImportError:
             raise ImportError(
-                "segment-anything is required. Install with: "
-                "pip install segment-anything"
+                "segment-anything is required. Install with: pip install segment-anything"
             )
         try:
             from huggingface_hub import hf_hub_download
         except ImportError:
             raise ImportError(
-                "huggingface_hub is required. Install with: "
-                "pip install huggingface_hub"
+                "huggingface_hub is required. Install with: pip install huggingface_hub"
             )
 
-        logger.info(f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})...")
+        logger.info(
+            f"  Downloading SAM checkpoint ({model_type}, ~{self._size_str(model_type)})..."
+        )
         checkpoint_path = hf_hub_download(
             repo_id=info["repo"],
             filename=info["filename"],
@@ -351,18 +350,22 @@ class SAMMaskGenerator:
         # MobileSAM uses a lightweight ViT-Tiny encoder + SAM's mask decoder
         # Try the mobile_sam package first, fall back to manual loading
         try:
-            from mobile_sam import sam_model_registry, SamPredictor as MobileSamPredictor
+            from mobile_sam import SamPredictor as MobileSamPredictor
+            from mobile_sam import sam_model_registry
+
             sam = sam_model_registry["vit_t"](checkpoint=checkpoint_path)
             predictor_cls = MobileSamPredictor
         except ImportError:
             # Fallback: MobileSAM checkpoint is compatible with standard SAM API
             # when using vit_t architecture
-            from segment_anything import sam_model_registry, SamPredictor
+            from segment_anything import SamPredictor, sam_model_registry
+
             try:
                 sam = sam_model_registry["vit_t"](checkpoint=checkpoint_path)
             except Exception:
                 # Last resort: load with standard build_sam
                 from segment_anything import build_sam
+
                 sam = build_sam(checkpoint=checkpoint_path)
             predictor_cls = SamPredictor
 
@@ -373,7 +376,9 @@ class SAMMaskGenerator:
         sam.eval()
         self.predictor = predictor_cls(sam)
         self._sam_model = sam
-        logger.info(f"  MobileSAM loaded on {self.device} ({self.precision}) — ⚡ ~5x faster than ViT-B")
+        logger.info(
+            f"  MobileSAM loaded on {self.device} ({self.precision}) — ⚡ ~5x faster than ViT-B"
+        )
 
     def _load_efficient_sam(self, info: dict):
         """Load EfficientSAM — ~15MB, good speed/quality trade-off."""
@@ -396,7 +401,6 @@ class SAMMaskGenerator:
 
         # EfficientSAM exports as TorchScript; use custom wrapper
         try:
-
             # Load the TorchScript model as the image encoder
             efficient_encoder = torch.jit.load(checkpoint_path)
             efficient_encoder.to(self.device)
@@ -410,8 +414,8 @@ class SAMMaskGenerator:
 
             # We still need SAM's prompt encoder + mask decoder
             # Load a lightweight SAM for the decoder parts
-            from segment_anything import sam_model_registry
             from huggingface_hub import hf_hub_download
+            from segment_anything import sam_model_registry
 
             vit_b_info = SAM_MODELS["vit_b"]
             vit_b_path = hf_hub_download(
@@ -430,7 +434,9 @@ class SAMMaskGenerator:
             self.predictor = _EfficientSAMPredictor(
                 efficient_encoder, self._efficient_sam, self.device
             )
-            logger.info(f"  EfficientSAM loaded on {self.device} ({self.precision}) — ⚡ ~3x faster than ViT-B")
+            logger.info(
+                f"  EfficientSAM loaded on {self.device} ({self.precision}) — ⚡ ~3x faster than ViT-B"
+            )
 
         except Exception as e:
             logger.warning(f"  ⚠️  EfficientSAM loading failed ({e}), falling back to MobileSAM...")
@@ -438,8 +444,13 @@ class SAMMaskGenerator:
 
     @staticmethod
     def _size_str(model_type: str) -> str:
-        sizes = {"vit_h": "2.4GB", "vit_l": "1.2GB", "vit_b": "350MB",
-                 "mobile": "9MB", "efficient": "15MB"}
+        sizes = {
+            "vit_h": "2.4GB",
+            "vit_l": "1.2GB",
+            "vit_b": "350MB",
+            "mobile": "9MB",
+            "efficient": "15MB",
+        }
         return sizes.get(model_type, "?")
 
     def generate_masks(
@@ -482,9 +493,12 @@ class SAMMaskGenerator:
 
             # FP16 autocast for mask decoder (~2x speedup)
             from contextlib import nullcontext
-            amp_ctx = torch.autocast(
-                device_type=self.device, dtype=torch.float16
-            ) if self._use_amp else nullcontext()
+
+            amp_ctx = (
+                torch.autocast(device_type=self.device, dtype=torch.float16)
+                if self._use_amp
+                else nullcontext()
+            )
             with amp_ctx:
                 mask, score, _ = self.predictor.predict(
                     box=input_box,
@@ -504,6 +518,7 @@ class SAMMaskGenerator:
 # Auto Annotator
 # ============================================================
 
+
 class _EfficientSAMPredictor:
     """Adapter: uses EfficientSAM lightweight encoder + SAM prompt encoder & mask decoder.
 
@@ -522,6 +537,7 @@ class _EfficientSAMPredictor:
     def set_image(self, image: np.ndarray):
         """Run EfficientSAM encoder to get image embeddings."""
         import cv2
+
         self._orig_size = image.shape[:2]
 
         # SAM expects 1024x1024 input
@@ -540,7 +556,7 @@ class _EfficientSAMPredictor:
 
         with torch.no_grad():
             # EfficientSAM encoder forward
-            if hasattr(self.encoder, 'forward'):
+            if hasattr(self.encoder, "forward"):
                 self._features = self.encoder(img)
             else:
                 self._features = self.encoder(img)
@@ -553,6 +569,7 @@ class _EfficientSAMPredictor:
         with torch.no_grad():
             # Prepare SAM inputs
             from segment_anything.utils.transforms import ResizeLongestSide
+
             transform = ResizeLongestSide(1024)
 
             # Transform box to 1024x1024 space
@@ -562,7 +579,9 @@ class _EfficientSAMPredictor:
 
             # Run SAM's prompt encoder
             sparse_emb, dense_emb = self.sam.prompt_encoder(
-                points=None, boxes=box_t, masks=None,
+                points=None,
+                boxes=box_t,
+                masks=None,
             )
 
             # Run SAM's mask decoder with EfficientSAM image features
@@ -576,6 +595,7 @@ class _EfficientSAMPredictor:
 
             # Post-process: upscale masks to original resolution
             from segment_anything.utils.transforms import ResizeLongestSide
+
             masks = self.sam.postprocess_masks(
                 low_res_masks,
                 input_size=self._input_size,
@@ -658,10 +678,14 @@ class AutoAnnotator:
 
         # Load models
         self.detector = GroundingDINODetector(
-            model_size=gdino_model, device=self.device, precision=self.precision,
+            model_size=gdino_model,
+            device=self.device,
+            precision=self.precision,
         )
         self.mask_generator = SAMMaskGenerator(
-            model_type=sam_model, device=self.device, precision=self.precision,
+            model_type=sam_model,
+            device=self.device,
+            precision=self.precision,
         )
 
         if verbose:
@@ -758,12 +782,14 @@ class AutoAnnotator:
                 boxes_by_class[class_name] = []
             boxes_by_class[class_name].append(box_scaled)
 
-            info_detections.append({
-                "box": [round(c, 1) for c in box_scaled],
-                "score": round(det["score"], 4),
-                "class": class_name,
-                "prompt": phrase,
-            })
+            info_detections.append(
+                {
+                    "box": [round(c, 1) for c in box_scaled],
+                    "score": round(det["score"], 4),
+                    "class": class_name,
+                    "prompt": phrase,
+                }
+            )
 
         # ---- Step 3: SAM mask generation ----
         image_np = np.array(image_pil)  # Original resolution, RGB
@@ -803,9 +829,7 @@ class AutoAnnotator:
                 "water_pixels": int(np.sum(final_mask == 2)),
                 "sky_pct": round(float(np.mean(final_mask == 1)) * 100, 2),
                 "water_pct": round(float(np.mean(final_mask == 2)) * 100, 2),
-                "total_coverage_pct": round(
-                    float(np.mean(final_mask > 0)) * 100, 2
-                ),
+                "total_coverage_pct": round(float(np.mean(final_mask > 0)) * 100, 2),
             },
         }
 
@@ -816,9 +840,7 @@ class AutoAnnotator:
         input_dir: str,
         output_dir: str,
         classes: Optional[Dict] = None,
-        extensions: Tuple[str, ...] = (
-            ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"
-        ),
+        extensions: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"),
         save_visualization: bool = True,
         skip_existing: bool = True,
     ) -> Dict:
@@ -890,13 +912,16 @@ class AutoAnnotator:
 
             except Exception as e:
                 import traceback
+
                 error_msg = f"{e}\n{traceback.format_exc()}"
                 logger.warning(f"\n⚠️  Error on {img_file.name}: {e}")
-                results.append({
-                    "image_path": str(img_file),
-                    "status": "error",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "image_path": str(img_file),
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
 
         elapsed = time.time() - start_time
 
@@ -913,9 +938,7 @@ class AutoAnnotator:
         }
 
         if successful:
-            coverages = [
-                r["mask_stats"]["total_coverage_pct"] for r in successful
-            ]
+            coverages = [r["mask_stats"]["total_coverage_pct"] for r in successful]
             summary["avg_coverage_pct"] = round(np.mean(coverages), 2)
             summary["min_coverage_pct"] = round(np.min(coverages), 2)
             summary["max_coverage_pct"] = round(np.max(coverages), 2)
@@ -926,17 +949,19 @@ class AutoAnnotator:
             json.dump({"summary": summary, "details": results}, f, indent=2)
 
         # Print
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info("📊 Annotation Complete!")
         logger.info(f"  Images processed: {summary['total']}")
         logger.info(f"  ✅ Successful:     {summary['successful']}")
         logger.info(f"  ❌ Failed:         {summary['failed']}")
-        logger.info(f"  ⏱️  Time:           {summary['elapsed_seconds']:.0f}s "
-              f"({summary['avg_seconds_per_image']:.1f}s/img)")
+        logger.info(
+            f"  ⏱️  Time:           {summary['elapsed_seconds']:.0f}s "
+            f"({summary['avg_seconds_per_image']:.1f}s/img)"
+        )
         if successful:
             logger.info(f"  📐 Avg coverage:   {summary['avg_coverage_pct']:.1f}%")
         logger.info(f"  📁 Output:         {output_path}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
 
         return summary
 
@@ -993,8 +1018,13 @@ class AutoAnnotator:
             pct = float(np.mean(mask == class_info["mask_value"])) * 100
             label = f"{class_name}: {pct:.1f}%"
             cv2.putText(
-                vis, label, (12, y_offset),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2,
+                vis,
+                label,
+                (12, y_offset),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
                 cv2.LINE_AA,
             )
             y_offset += 28
@@ -1005,6 +1035,7 @@ class AutoAnnotator:
 # ============================================================
 # CLI
 # ============================================================
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1027,66 +1058,93 @@ Examples:
     )
     # I/O
     parser.add_argument(
-        "-i", "--input", type=str, required=True,
+        "-i",
+        "--input",
+        type=str,
+        required=True,
         help="Input image file or directory",
     )
     parser.add_argument(
-        "-o", "--output", type=str, default="./data/masks",
+        "-o",
+        "--output",
+        type=str,
+        default="./data/masks",
         help="Output directory for masks (default: ./data/masks)",
     )
     # Model selection
     parser.add_argument(
-        "--gdino-model", type=str, default="base",
+        "--gdino-model",
+        type=str,
+        default="base",
         choices=["tiny", "base"],
         help="Grounding DINO model: tiny (faster) or base (more accurate)",
     )
     parser.add_argument(
-        "--sam-model", type=str, default="vit_h",
+        "--sam-model",
+        type=str,
+        default="vit_h",
         choices=["vit_h", "vit_l", "vit_b", "mobile", "efficient"],
         help="SAM model: mobile/efficient (fastest), vit_b (balanced), vit_h/l (best)",
     )
     parser.add_argument(
-        "--precision", type=str, default="fp32",
+        "--precision",
+        type=str,
+        default="fp32",
         choices=["fp32", "fp16"],
         help="FP16 gives ~2x speedup on MPS/CUDA (default: fp32)",
     )
     parser.add_argument(
-        "--fast", action="store_true",
+        "--fast",
+        action="store_true",
         help="Enable all speed optimizations: fp16 + mobile sam + 768px",
     )
     # Device
     parser.add_argument(
-        "--device", type=str, default="cuda",
+        "--device",
+        type=str,
+        default="cuda",
         help="Device: cuda (GPU) or cpu",
     )
     # Thresholds
     parser.add_argument(
-        "--box-threshold", type=float, default=0.25,
+        "--box-threshold",
+        type=float,
+        default=0.25,
         help="Grounding DINO box confidence (0-1, lower = more detections)",
     )
     parser.add_argument(
-        "--text-threshold", type=float, default=0.20,
+        "--text-threshold",
+        type=float,
+        default=0.20,
         help="Grounding DINO text matching confidence (0-1)",
     )
     parser.add_argument(
-        "--sam-mask-threshold", type=float, default=0.7,
+        "--sam-mask-threshold",
+        type=float,
+        default=0.7,
         help="SAM mask quality threshold (0-1)",
     )
     # Processing
     parser.add_argument(
-        "--image-size", type=int, default=1024,
+        "--image-size",
+        type=int,
+        default=1024,
         help="Max image dimension for Grounding DINO (768-2048)",
     )
     parser.add_argument(
-        "--no-viz", action="store_true",
+        "--no-viz",
+        action="store_true",
         help="Skip saving visualization overlays",
     )
     parser.add_argument(
-        "--no-skip", action="store_true",
+        "--no-skip",
+        action="store_true",
         help="Re-annotate images that already have masks",
     )
     parser.add_argument(
-        "--classes", type=str, default=None,
+        "--classes",
+        type=str,
+        default=None,
         help="Path to JSON file with custom class definitions",
     )
 

@@ -27,7 +27,6 @@ warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimize
 from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
-from skywater_seg.visualization import colorize_mask, tensor_to_image
 from skywater_seg.utils import (
     CLASS_COLORS_RGB,
     compute_dice,
@@ -42,6 +41,7 @@ from skywater_seg.utils import (
     tensor_to_image,
     to_device,
 )
+from skywater_seg.visualization import colorize_mask, tensor_to_image
 
 # TensorBoard tag hierarchy
 TB_LOSS = "Loss"
@@ -77,7 +77,7 @@ def _setup_logger(output_dir: Path) -> str:
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
         level="DEBUG",
         rotation="10 MB",
-        retention=5,        # Keep 5 rotated log files
+        retention=5,  # Keep 5 rotated log files
         encoding="utf-8",
     )
 
@@ -125,7 +125,9 @@ class Trainer:
         self.criterion = get_loss(config)
         self.criterion.to(self.device)
         self.optimizer = self._create_optimizer()
-        self.scaler = GradScaler(enabled=(config.train.mixed_precision and self.device.type == 'cuda'))
+        self.scaler = GradScaler(
+            enabled=(config.train.mixed_precision and self.device.type == "cuda")
+        )
         self.scheduler = create_scheduler(self.optimizer, config, len(train_loader))
 
         # ---- TensorBoard ----
@@ -164,7 +166,9 @@ class Trainer:
         logger.info(f"  Log: {self._log_path}")
         logger.info("=" * 60)
 
-        logger.info(f"Train batches: {len(self.train_loader)} | Val batches: {len(self.val_loader)}")
+        logger.info(
+            f"Train batches: {len(self.train_loader)} | Val batches: {len(self.val_loader)}"
+        )
 
         for epoch in range(self.current_epoch, cfg.epochs):
             self.current_epoch = epoch
@@ -189,7 +193,7 @@ class Trainer:
             # ---- Validate ----
             if (epoch + 1) % cfg.val_every == 0:
                 # Clear CUDA cache to reduce fragmentation (critical on Windows/limited RAM)
-                if self.device.type == 'cuda':
+                if self.device.type == "cuda":
                     torch.cuda.empty_cache()
                 val_metrics = self._validate(epoch, log_images=True)
 
@@ -201,9 +205,13 @@ class Trainer:
                     self.patience_counter = 0
                     best_path = self.output_dir / "best_model.pth"
                     save_checkpoint(
-                        self.model, self.optimizer, self.scheduler,
-                        epoch + 1, {"miou": self.best_val_iou},
-                        str(best_path), is_best=True,
+                        self.model,
+                        self.optimizer,
+                        self.scheduler,
+                        epoch + 1,
+                        {"miou": self.best_val_iou},
+                        str(best_path),
+                        is_best=True,
                         model_meta=self._model_meta(),
                     )
                     logger.info(f"Best model saved: {best_path} (mIoU={self.best_val_iou:.4f})")
@@ -215,7 +223,9 @@ class Trainer:
                     self.writer.add_scalar("Loss/epoch/val", val_metrics["loss"], epoch)
                     self.writer.add_scalar(f"{TB_METRICS}/val/mIoU", current_iou, epoch)
                     self.writer.add_scalar(f"{TB_METRICS}/val/mDice", val_metrics["mdice"], epoch)
-                    self.writer.add_scalar(f"{TB_METRICS}/val/PixelAcc", val_metrics["pixel_acc"], epoch)
+                    self.writer.add_scalar(
+                        f"{TB_METRICS}/val/PixelAcc", val_metrics["pixel_acc"], epoch
+                    )
                     for c in range(config.model.classes):
                         key = f"iou_class_{c}"
                         if key in val_metrics:
@@ -226,7 +236,9 @@ class Trainer:
 
                 # Early stopping
                 if self.patience_counter >= cfg.early_stopping_patience:
-                    logger.info(f"Early stopping at epoch {epoch + 1} (patience={cfg.early_stopping_patience})")
+                    logger.info(
+                        f"Early stopping at epoch {epoch + 1} (patience={cfg.early_stopping_patience})"
+                    )
                     break
 
             # ---- Periodic: weight histograms ----
@@ -235,10 +247,13 @@ class Trainer:
 
             # ---- Checkpoint ----
             if (epoch + 1) % cfg.save_every == 0:
-                ckpt_path = self.output_dir / f"checkpoint_epoch_{epoch+1}.pth"
+                ckpt_path = self.output_dir / f"checkpoint_epoch_{epoch + 1}.pth"
                 save_checkpoint(
-                    self.model, self.optimizer, self.scheduler,
-                    epoch + 1, {"miou": self.best_val_iou},
+                    self.model,
+                    self.optimizer,
+                    self.scheduler,
+                    epoch + 1,
+                    {"miou": self.best_val_iou},
                     str(ckpt_path),
                     model_meta=self._model_meta(),
                 )
@@ -246,7 +261,9 @@ class Trainer:
 
         # ---- Done ----
         logger.info("=" * 60)
-        logger.info(f"Training Complete! Best mIoU: {self.best_val_iou:.4f} (epoch {self.best_epoch + 1})")
+        logger.info(
+            f"Training Complete! Best mIoU: {self.best_val_iou:.4f} (epoch {self.best_epoch + 1})"
+        )
         logger.info(f"  TensorBoard: {self._log_dir}")
         logger.info(f"  Log file: {self._log_path}")
         logger.info("=" * 60)
@@ -275,7 +292,7 @@ class Trainer:
         pbar = tqdm(
             enumerate(self.train_loader),
             total=num_batches,
-            desc=f"Train {epoch+1:3d}",
+            desc=f"Train {epoch + 1:3d}",
             unit="batch",
             ncols=120,
             leave=False,
@@ -336,8 +353,12 @@ class Trainer:
         if train_preds:
             all_p = torch.cat(train_preds, dim=0)
             all_t = torch.cat(train_targets, dim=0)
-            iou = compute_iou(all_p, all_t, self.config.model.classes, self.config.data.ignore_index)
-            dice = compute_dice(all_p, all_t, self.config.model.classes, self.config.data.ignore_index)
+            iou = compute_iou(
+                all_p, all_t, self.config.model.classes, self.config.data.ignore_index
+            )
+            dice = compute_dice(
+                all_p, all_t, self.config.model.classes, self.config.data.ignore_index
+            )
         else:
             iou, dice = {"miou": 0.0}, {"mdice": 0.0}
 
@@ -348,7 +369,7 @@ class Trainer:
         }
 
         logger.info(
-            f"Epoch {epoch+1:3d} train | loss={avg_loss:.4f} | "
+            f"Epoch {epoch + 1:3d} train | loss={avg_loss:.4f} | "
             f"mIoU={train_metrics['mIoU']:.4f} | mDice={train_metrics['mDice']:.4f} | "
             f"lr={self.optimizer.param_groups[0]['lr']:.2e}"
         )
@@ -370,7 +391,7 @@ class Trainer:
         pbar = tqdm(
             enumerate(self.val_loader),
             total=len(self.val_loader),
-            desc=f"Val   {epoch+1:3d}",
+            desc=f"Val   {epoch + 1:3d}",
             unit="batch",
             ncols=100,
             leave=False,
@@ -398,7 +419,9 @@ class Trainer:
         all_targets = torch.cat(all_targets, dim=0)
 
         iou_metrics = compute_iou(all_preds, all_targets, cfg.model.classes, cfg.data.ignore_index)
-        dice_metrics = compute_dice(all_preds, all_targets, cfg.model.classes, cfg.data.ignore_index)
+        dice_metrics = compute_dice(
+            all_preds, all_targets, cfg.model.classes, cfg.data.ignore_index
+        )
         pixel_acc = compute_pixel_accuracy(all_preds, all_targets, cfg.data.ignore_index)
 
         return {
@@ -419,7 +442,7 @@ class Trainer:
         for p in self.model.parameters():
             if p.grad is not None:
                 total_norm += p.grad.data.norm(2).item() ** 2
-        return total_norm ** 0.5
+        return total_norm**0.5
 
     def _log_gradient_histograms(self, step: int):
         for name, param in self.model.named_parameters():
@@ -433,8 +456,14 @@ class Trainer:
                 if any(k in name for k in ["conv", "bn", "aspp", "classifier"]):
                     self.writer.add_histogram(f"{TB_WEIGHT}/{name}", param.data.cpu(), epoch)
 
-    def _log_predictions(self, epoch: int, images: torch.Tensor,
-                         masks: torch.Tensor, preds: torch.Tensor, max_samples: int = 8):
+    def _log_predictions(
+        self,
+        epoch: int,
+        images: torch.Tensor,
+        masks: torch.Tensor,
+        preds: torch.Tensor,
+        max_samples: int = 8,
+    ):
         """Log GT vs Prediction overlays to TensorBoard."""
         import cv2
 
@@ -467,26 +496,45 @@ class Trainer:
             return im
 
         for i in range(n):
-            img = cv2.resize(tensor_to_image(images[i].cpu()),
-                             masks.shape[2:][::-1])
+            img = cv2.resize(tensor_to_image(images[i].cpu()), masks.shape[2:][::-1])
             gt = masks[i].cpu().numpy().astype(np.uint8)
             pd = preds[i].cpu().numpy().astype(np.uint8)
 
-            row1 = np.hstack([_label(img.copy(), "Input"),
-                              _label(_blend(img, gt), "GT"),
-                              _label(_blend(img, pd), "Pred")])
-            row2 = np.hstack([_label(_highlight(gt, 1, SKY), "Sky GT"),
-                              _label(_highlight(pd, 1, SKY), "Sky Pred"),
-                              _label(_err(gt, pd, 1), "Sky Err (red=miss, yellow=false)")])
-            row3 = np.hstack([_label(_highlight(gt, 2, WTR), "Water GT"),
-                              _label(_highlight(pd, 2, WTR), "Water Pred"),
-                              _label(_err(gt, pd, 2), "Water Err (red=miss, yellow=false)")])
+            row1 = np.hstack(
+                [
+                    _label(img.copy(), "Input"),
+                    _label(_blend(img, gt), "GT"),
+                    _label(_blend(img, pd), "Pred"),
+                ]
+            )
+            row2 = np.hstack(
+                [
+                    _label(_highlight(gt, 1, SKY), "Sky GT"),
+                    _label(_highlight(pd, 1, SKY), "Sky Pred"),
+                    _label(_err(gt, pd, 1), "Sky Err (red=miss, yellow=false)"),
+                ]
+            )
+            row3 = np.hstack(
+                [
+                    _label(_highlight(gt, 2, WTR), "Water GT"),
+                    _label(_highlight(pd, 2, WTR), "Water Pred"),
+                    _label(_err(gt, pd, 2), "Water Err (red=miss, yellow=false)"),
+                ]
+            )
             rows = [row1, row2, row3]
             if self.config.model.classes >= 4:
-                rows.append(np.hstack([_label(_highlight(gt, 3, PRS), "Person GT"),
-                                       _label(_highlight(pd, 3, PRS), "Person Pred"),
-                                       _label(_err(gt, pd, 3), "Person Err (red=miss, yellow=false)")]))
-            self.writer.add_image(f"{TB_IMAGE}/sample_{i}", np.vstack(rows), epoch, dataformats="HWC")
+                rows.append(
+                    np.hstack(
+                        [
+                            _label(_highlight(gt, 3, PRS), "Person GT"),
+                            _label(_highlight(pd, 3, PRS), "Person Pred"),
+                            _label(_err(gt, pd, 3), "Person Err (red=miss, yellow=false)"),
+                        ]
+                    )
+                )
+            self.writer.add_image(
+                f"{TB_IMAGE}/sample_{i}", np.vstack(rows), epoch, dataformats="HWC"
+            )
 
     # ---- Internal helpers ----
 
@@ -494,25 +542,33 @@ class Trainer:
         cfg = self.config.train
         if cfg.optimizer == "adamw":
             return torch.optim.AdamW(
-                self.model.parameters(), lr=cfg.learning_rate,
-                weight_decay=cfg.weight_decay, betas=tuple(cfg.betas),
+                self.model.parameters(),
+                lr=cfg.learning_rate,
+                weight_decay=cfg.weight_decay,
+                betas=tuple(cfg.betas),
             )
         elif cfg.optimizer == "adam":
             return torch.optim.Adam(
-                self.model.parameters(), lr=cfg.learning_rate,
-                weight_decay=cfg.weight_decay, betas=tuple(cfg.betas),
+                self.model.parameters(),
+                lr=cfg.learning_rate,
+                weight_decay=cfg.weight_decay,
+                betas=tuple(cfg.betas),
             )
         elif cfg.optimizer == "sgd":
             return torch.optim.SGD(
-                self.model.parameters(), lr=cfg.learning_rate,
-                momentum=cfg.momentum, weight_decay=cfg.weight_decay,
+                self.model.parameters(),
+                lr=cfg.learning_rate,
+                momentum=cfg.momentum,
+                weight_decay=cfg.weight_decay,
             )
         else:
             raise ValueError(f"Unknown optimizer: {cfg.optimizer}")
 
     def _resume(self, checkpoint_path: str):
         logger.info(f"Resuming from: {checkpoint_path}")
-        ckpt = load_checkpoint(checkpoint_path, self.model, self.optimizer, self.scheduler, device=self.device)
+        ckpt = load_checkpoint(
+            checkpoint_path, self.model, self.optimizer, self.scheduler, device=self.device
+        )
         self.current_epoch = ckpt.get("epoch", 0)
         self.best_val_iou = ckpt.get("metrics", {}).get("miou", 0.0)
         logger.info(f"  Resumed at epoch {self.current_epoch}, best mIoU={self.best_val_iou:.4f}")
@@ -533,11 +589,12 @@ class Trainer:
             "class_mapping": cfg.data.class_mapping,
         }
 
-    def _log_val_progress(self, epoch: int, train_loss: float,
-                          metrics: Dict[str, float], is_best: bool):
+    def _log_val_progress(
+        self, epoch: int, train_loss: float, metrics: Dict[str, float], is_best: bool
+    ):
         marker = " [BEST]" if is_best else ""
         logger.info(
-            f"Epoch {epoch+1:3d} val{marker} | "
+            f"Epoch {epoch + 1:3d} val{marker} | "
             f"loss={metrics['loss']:.4f} | "
             f"mIoU={metrics['miou']:.4f} | "
             f"mDice={metrics['mdice']:.4f} | "

@@ -13,12 +13,12 @@ DINOv3-distilled weights: use `encoder_weights: dinov3` to load Meta's
 DINOv3-distilled ConvNeXt weights (e.g. convnext_tiny.dinov3_lvd1689m).
 """
 
-
 import torch.nn as nn
 from loguru import logger
 
 try:
     from huggingface_hub import PyTorchModelHubMixin
+
     _HAS_HF_HUB = True
 except ImportError:
     PyTorchModelHubMixin = object  # type: ignore
@@ -41,7 +41,6 @@ _EXTRA_ENCODERS = {
         "params": {"depths": [3, 3, 27, 3], "dims": [128, 256, 512, 1024]},
     },
 }
-
 
 
 def create_model(config: Config) -> nn.Module:
@@ -121,8 +120,10 @@ def _create_convnext_model(config: Config, smp) -> nn.Module:
     and assemble the full model (encoder + decoder + head) manually.
     """
     import timm
-    from segmentation_models_pytorch.decoders.deeplabv3.model import DeepLabV3PlusDecoder
     from segmentation_models_pytorch.base import SegmentationHead, initialization
+    from segmentation_models_pytorch.decoders.deeplabv3.model import (
+        DeepLabV3PlusDecoder,
+    )
     from segmentation_models_pytorch.encoders._base import EncoderMixin
 
     encoder_name = config.model.encoder_name
@@ -165,8 +166,8 @@ def _create_convnext_model(config: Config, smp) -> nn.Module:
             self._in_channels = 3
 
         def forward(self, x):
-            stem_feat = self.stem(x)               # stride 2
-            timm_feats = self._timm(x)             # strides 4, 8, 16, 32
+            stem_feat = self.stem(x)  # stride 2
+            timm_feats = self._timm(x)  # strides 4, 8, 16, 32
             return [stem_feat] + list(timm_feats)  # 5 features total
 
         @property
@@ -193,8 +194,13 @@ def _create_convnext_model(config: Config, smp) -> nn.Module:
     )
 
     # ── Assemble full model ──
-    model = _AssembledModel(encoder, decoder, head, config.model.classes,
-                            output_stride=config.model.encoder_output_stride)
+    model = _AssembledModel(
+        encoder,
+        decoder,
+        head,
+        config.model.classes,
+        output_stride=config.model.encoder_output_stride,
+    )
     initialization.initialize_decoder(decoder)
     initialization.initialize_head(head)
 
@@ -203,6 +209,7 @@ def _create_convnext_model(config: Config, smp) -> nn.Module:
 
 class _AssembledModel(nn.Module):
     """Complete segmentation model: encoder + decoder + head."""
+
     def __init__(self, encoder, decoder, head, num_classes, output_stride=16):
         super().__init__()
         self.encoder = encoder
@@ -224,7 +231,7 @@ def get_model_info(model: nn.Module) -> dict:
     """Get model statistics: parameter count, size estimate, etc."""
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    size_mb = total_params * 4 / (1024 ** 2)
+    size_mb = total_params * 4 / (1024**2)
     return {
         "total_params": total_params,
         "trainable_params": trainable_params,
@@ -356,9 +363,8 @@ PRESETS = {
 def create_model_from_preset(preset_name: str) -> nn.Module:
     """Create model from a predefined preset configuration."""
     if preset_name not in PRESETS:
-        raise ValueError(
-            f"Unknown preset: {preset_name}. Available: {list(PRESETS.keys())}"
-        )
+        raise ValueError(f"Unknown preset: {preset_name}. Available: {list(PRESETS.keys())}")
     import segmentation_models_pytorch as smp
+
     preset = PRESETS[preset_name]
     return smp.DeepLabV3Plus(**preset)

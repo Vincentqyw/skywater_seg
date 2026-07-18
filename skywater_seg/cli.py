@@ -15,6 +15,7 @@ def annotate():
     """`skywater-annotate` CLI — auto-annotation with Grounding DINO + SAM."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from scripts.auto_annotate import main
+
     main()
 
 
@@ -22,6 +23,7 @@ def train_cmd():
     """`skywater-train` CLI — train lightweight segmentation model."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from train import main
+
     main()
 
 
@@ -29,4 +31,5 @@ def infer():
     """`skywater-infer` CLI — run inference with trained model."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from inference import main
+
     main()

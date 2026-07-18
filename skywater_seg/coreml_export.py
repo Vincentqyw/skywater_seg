@@ -54,8 +54,7 @@ def export_coreml(
     # Convert to CoreML
     mlmodel = ct.converters.onnx.convert(
         model=onnx_model,
-        minimum_deployment_target=minimum_deployment_target
-        or ct.target.macOS13,
+        minimum_deployment_target=minimum_deployment_target or ct.target.macOS13,
         compute_units=getattr(ct.ComputeUnit, compute_units.upper(), ct.ComputeUnit.ALL),
     )
 
@@ -79,7 +78,7 @@ def export_coreml(
     else:
         mlmodel.save(output_path)
 
-    size_mb = _dir_size(output_path) / (1024 ** 2)
+    size_mb = _dir_size(output_path) / (1024**2)
     logger.info(f"CoreML model saved: {output_path} ({size_mb:.1f} MB)")
     logger.info(f"  Compute units: {compute_units}")
     logger.info("  On Apple Silicon, CoreML runs on Neural Engine for max speed")
@@ -117,17 +116,19 @@ def export_coreml_from_torch(
     # Convert to CoreML
     mlmodel = ct.convert(
         traced,
-        inputs=[ct.TensorType(
-            name="input",
-            shape=(1, 3, h, w),
-        )],
+        inputs=[
+            ct.TensorType(
+                name="input",
+                shape=(1, 3, h, w),
+            )
+        ],
         outputs=[ct.TensorType(name="output")],
         minimum_deployment_target=ct.target.macOS13,
         compute_units=getattr(ct.ComputeUnit, compute_units.upper(), ct.ComputeUnit.ALL),
     )
 
     mlmodel.save(output_path)
-    size_mb = _dir_size(output_path) / (1024 ** 2)
+    size_mb = _dir_size(output_path) / (1024**2)
     logger.info(f"PyTorch → CoreML: {output_path} ({size_mb:.1f} MB)")
 
     return output_path
@@ -198,8 +199,10 @@ class CoreMLInference:
         # Convert to torch tensor for resize
         logits_t = torch.from_numpy(logits)
         logits_t = F.interpolate(
-            logits_t, size=(orig_h, orig_w),
-            mode="bilinear", align_corners=False,
+            logits_t,
+            size=(orig_h, orig_w),
+            mode="bilinear",
+            align_corners=False,
         )
         mask = torch.argmax(logits_t, dim=1)[0].numpy().astype(np.uint8)
 

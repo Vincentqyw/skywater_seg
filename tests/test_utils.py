@@ -6,8 +6,8 @@ import torch
 from skywater_seg.utils import (
     CLASS_COLORS_RGB,
     class_colors_bgr,
-    compute_iou,
     compute_dice,
+    compute_iou,
     compute_pixel_accuracy,
     get_device,
     mask_to_color,

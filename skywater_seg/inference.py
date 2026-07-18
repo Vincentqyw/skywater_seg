@@ -17,7 +17,6 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-
 from loguru import logger
 
 from skywater_seg.config import Config
@@ -45,9 +44,7 @@ class SegmentationInference:
 
         # Load checkpoint first to extract metadata
         if checkpoint_path.endswith(".pth"):
-            state_dict = torch.load(
-                checkpoint_path, map_location=self.device, weights_only=False
-            )
+            state_dict = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         else:
             raise ValueError(f"Unsupported checkpoint format: {checkpoint_path}")
 
@@ -116,9 +113,7 @@ class SegmentationInference:
         logits = self.model(input_tensor)  # (1, C, H, W)
 
         # Resize back to original size
-        logits = F.interpolate(
-            logits, size=(orig_h, orig_w), mode="bilinear", align_corners=False
-        )
+        logits = F.interpolate(logits, size=(orig_h, orig_w), mode="bilinear", align_corners=False)
 
         probs = F.softmax(logits, dim=1)  # (1, C, H, W)
         mask = torch.argmax(probs, dim=1)[0]  # (H, W)
@@ -181,17 +176,19 @@ class SegmentationInference:
             # Process each image
             for j, (h, w) in enumerate(orig_sizes):
                 logits_j = F.interpolate(
-                    logits[j:j+1], size=(h, w), mode="bilinear", align_corners=False
+                    logits[j : j + 1], size=(h, w), mode="bilinear", align_corners=False
                 )
                 probs = F.softmax(logits_j, dim=1)
                 mask = torch.argmax(probs, dim=1)[0]
 
                 mask_np = mask.cpu().numpy().astype(np.uint8)
-                results.append({
-                    "mask": mask_np,
-                    "sky_mask": (mask_np == 1),
-                    "water_mask": (mask_np == 2),
-                })
+                results.append(
+                    {
+                        "mask": mask_np,
+                        "sky_mask": (mask_np == 1),
+                        "water_mask": (mask_np == 2),
+                    }
+                )
 
         return results
 
@@ -199,7 +196,9 @@ class SegmentationInference:
         """Resize, normalize (ImageNet stats), convert to NCHW tensor."""
         h, w = self.image_size
         image = cv2.resize(image_rgb, (w, h), interpolation=cv2.INTER_LINEAR)
-        image = (image.astype(np.float32) / 255.0 - ONNXRuntimeInference.MEAN) / ONNXRuntimeInference.STD
+        image = (
+            image.astype(np.float32) / 255.0 - ONNXRuntimeInference.MEAN
+        ) / ONNXRuntimeInference.STD
         tensor = torch.from_numpy(image.transpose(2, 0, 1)).float().unsqueeze(0)
         return tensor
 
@@ -268,10 +267,14 @@ class SegmentationInference:
         dummy_input = torch.randn(1, 3, h, w)
 
         # Dynamic axes
-        dynamic_axes = {
-            "input": {0: "batch", 2: "height", 3: "width"},
-            "output": {0: "batch", 2: "height", 3: "width"},
-        } if dynamic_batch else {}
+        dynamic_axes = (
+            {
+                "input": {0: "batch", 2: "height", 3: "width"},
+                "output": {0: "batch", 2: "height", 3: "width"},
+            }
+            if dynamic_batch
+            else {}
+        )
 
         # Export
         torch.onnx.export(
@@ -303,14 +306,17 @@ class SegmentationInference:
 
         # Verify
         import onnx
+
         onnx_model = onnx.load(output_path)
         onnx.checker.check_model(onnx_model)
         logger.info(f"ONNX model verified: {output_path}")
 
-        size_mb = os.path.getsize(output_path) / (1024 ** 2)
+        size_mb = os.path.getsize(output_path) / (1024**2)
         logger.info(f"  Model size: {size_mb:.1f} MB")
-        logger.info(f"  To convert to TensorRT: trtexec --onnx={output_path} --fp16 "
-                    f"--saveEngine={Path(output_path).stem}.trt")
+        logger.info(
+            f"  To convert to TensorRT: trtexec --onnx={output_path} --fp16 "
+            f"--saveEngine={Path(output_path).stem}.trt"
+        )
 
         return output_path
 
@@ -325,7 +331,7 @@ class SegmentationInference:
         traced = torch.jit.trace(self.model, dummy_input)
         traced.save(output_path)
 
-        size_mb = os.path.getsize(output_path) / (1024 ** 2)
+        size_mb = os.path.getsize(output_path) / (1024**2)
         logger.info(f"TorchScript model saved: {output_path} ({size_mb:.1f} MB)")
         return output_path
 
@@ -370,16 +376,16 @@ class ONNXRuntimeInference:
         "cpu": "CPUExecutionProvider",
         "cuda": "CUDAExecutionProvider",
         "tensorrt": "TensorrtExecutionProvider",
-        "coreml": "CoreMLExecutionProvider",      # Apple Silicon / Neural Engine
-        "rocm": "ROCMExecutionProvider",           # AMD GPU
-        "openvino": "OpenVINOExecutionProvider",   # Intel CPU/GPU
-        "dml": "DmlExecutionProvider",             # DirectML (Windows GPU)
-        "acl": "ACLExecutionProvider",             # ARM Compute Library
+        "coreml": "CoreMLExecutionProvider",  # Apple Silicon / Neural Engine
+        "rocm": "ROCMExecutionProvider",  # AMD GPU
+        "openvino": "OpenVINOExecutionProvider",  # Intel CPU/GPU
+        "dml": "DmlExecutionProvider",  # DirectML (Windows GPU)
+        "acl": "ACLExecutionProvider",  # ARM Compute Library
     }
 
     # ImageNet normalisation (same as training)
     MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
     def __init__(
         self,
@@ -402,15 +408,12 @@ class ONNXRuntimeInference:
         try:
             import onnxruntime as ort
         except ImportError:
-            raise ImportError(
-                "onnxruntime is required. Install with: pip install onnxruntime"
-            )
+            raise ImportError("onnxruntime is required. Install with: pip install onnxruntime")
         ep = self._PROVIDER_MAP.get(provider, provider)
         available = ort.get_available_providers()
         if ep not in available:
             logger.warning(
-                f"Provider '{ep}' not available (available: {available}). "
-                f"Falling back to CPU."
+                f"Provider '{ep}' not available (available: {available}). Falling back to CPU."
             )
             ep = "CPUExecutionProvider"
 
@@ -507,8 +510,10 @@ class ONNXRuntimeInference:
         # -- resize to original --------------------------------------------
         logits_t = torch.from_numpy(logits)
         logits_t = F.interpolate(
-            logits_t, size=(orig_h, orig_w),
-            mode="bilinear", align_corners=False,
+            logits_t,
+            size=(orig_h, orig_w),
+            mode="bilinear",
+            align_corners=False,
         )
         # argmax(logits) == argmax(softmax(logits)) — skip softmax for speed
         mask = torch.argmax(logits_t, dim=1)[0].numpy().astype(np.uint8)
@@ -559,15 +564,16 @@ class ONNXRuntimeInference:
 
             # Process each image in the batch
             for j, (oh, ow) in enumerate(orig_sizes):
-                lt = torch.from_numpy(logits[j:j+1])
-                lt = F.interpolate(lt, size=(oh, ow), mode="bilinear",
-                                   align_corners=False)
+                lt = torch.from_numpy(logits[j : j + 1])
+                lt = F.interpolate(lt, size=(oh, ow), mode="bilinear", align_corners=False)
                 mask = torch.argmax(lt, dim=1)[0].numpy().astype(np.uint8)
-                results.append({
-                    "mask": mask,
-                    "sky_mask": (mask == 1),
-                    "water_mask": (mask == 2),
-                })
+                results.append(
+                    {
+                        "mask": mask,
+                        "sky_mask": (mask == 1),
+                        "water_mask": (mask == 2),
+                    }
+                )
 
         return results
 
@@ -586,6 +592,7 @@ class ONNXRuntimeInference:
 # ═══════════════════════════════════════════════════════════════════════
 # Standalone ONNX export helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def export_onnx(
     model: torch.nn.Module,
@@ -635,7 +642,9 @@ def export_onnx(
         }
 
     torch.onnx.export(
-        model, dummy, output_path,
+        model,
+        dummy,
+        output_path,
         opset_version=opset_version,
         input_names=["input"],
         output_names=["output"],
@@ -649,6 +658,7 @@ def export_onnx(
     if simplify:
         try:
             from onnxsim import simplify as onnx_simplify
+
             m = onnx.load(output_path)
             m_simp, ok = onnx_simplify(m)
             if ok:
@@ -707,19 +717,23 @@ def convert_onnx_fp16(
     return output_path
 
 
-
 # Mapping from meta keys → (config_section, attribute_name, transform_fn)
 _META_FIELDS = [
-    ("image_size",       "data",  "image_size",      tuple),
-    ("num_classes",      "data",  "num_classes",     None),
-    ("mean",             "data",  "mean",            None),
-    ("std",              "data",  "std",             None),
-    ("class_mapping",    "data",  "class_mapping",   lambda v: {int(k): x for k, x in v.items()} if v else None),
-    ("model_name",       "model", "name",            None),
-    ("encoder_name",     "model", "encoder_name",    None),
-    ("encoder_weights",  "model", "encoder_weights", None),
-    ("classes",          "model", "classes",         None),
-    ("in_channels",      "model", "in_channels",     None),
+    ("image_size", "data", "image_size", tuple),
+    ("num_classes", "data", "num_classes", None),
+    ("mean", "data", "mean", None),
+    ("std", "data", "std", None),
+    (
+        "class_mapping",
+        "data",
+        "class_mapping",
+        lambda v: {int(k): x for k, x in v.items()} if v else None,
+    ),
+    ("model_name", "model", "name", None),
+    ("encoder_name", "model", "encoder_name", None),
+    ("encoder_weights", "model", "encoder_weights", None),
+    ("classes", "model", "classes", None),
+    ("in_channels", "model", "in_channels", None),
 ]
 
 
@@ -737,6 +751,7 @@ def _config_from_meta(meta: dict, fallback: Optional[Config] = None) -> Config:
 # Simple high-level API
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def load_model(device: str = "cuda") -> "SkyWaterSegModel":
     """Load the SegFormer B2 model from HuggingFace.
 
@@ -747,6 +762,7 @@ def load_model(device: str = "cuda") -> "SkyWaterSegModel":
         Model in eval mode on the requested device.
     """
     from skywater_seg.model import SkyWaterSegModel
+
     model = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
     return model.eval().to(device)
 
@@ -768,12 +784,24 @@ def segment(
     """
     if model is None:
         model = load_model(device)
-    img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB) if isinstance(image, str) else image[:, :, :3]
+    img = (
+        cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB)
+        if isinstance(image, str)
+        else image[:, :, :3]
+    )
     h, w = img.shape[:2]
-    t = torch.from_numpy(
-        (cv2.resize(img, model.image_size[::-1]).astype(np.float32) / 255.0
-         - ONNXRuntimeInference.MEAN) / ONNXRuntimeInference.STD
-    ).permute(2, 0, 1).unsqueeze(0).to(device)
+    t = (
+        torch.from_numpy(
+            (
+                cv2.resize(img, model.image_size[::-1]).astype(np.float32) / 255.0
+                - ONNXRuntimeInference.MEAN
+            )
+            / ONNXRuntimeInference.STD
+        )
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .to(device)
+    )
     with torch.no_grad():
         logits = F.interpolate(model(t), size=(h, w), mode="bilinear")
     return torch.argmax(logits, dim=1)[0].cpu().numpy().astype(np.uint8)

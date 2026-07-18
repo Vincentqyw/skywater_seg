@@ -123,12 +123,14 @@ class TestOmegaConfStructured:
     def test_cli_type_coercion(self):
         """String values from CLI are auto-cast to field types."""
         schema = OmegaConf.structured(Config())
-        cli = OmegaConf.from_dotlist([
-            "train.batch_size=32",
-            "train.learning_rate=0.001",
-            "train.mixed_precision=false",
-            "data.image_size=[384, 384]",
-        ])
+        cli = OmegaConf.from_dotlist(
+            [
+                "train.batch_size=32",
+                "train.learning_rate=0.001",
+                "train.mixed_precision=false",
+                "data.image_size=[384, 384]",
+            ]
+        )
         merged = OmegaConf.merge(schema, cli)
         cfg = OmegaConf.to_object(merged)
         assert isinstance(cfg.train.batch_size, int)

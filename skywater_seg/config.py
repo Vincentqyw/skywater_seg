@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from omegaconf import OmegaConf, DictConfig
-
+from omegaconf import DictConfig, OmegaConf
 
 # ═══════════════════════════════════════════════════════════════════════
 # Dataclass schemas (single source of truth for fields + defaults)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class DataConfig:
