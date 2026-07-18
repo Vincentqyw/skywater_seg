@@ -1,0 +1,73 @@
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Checkpoints and models
+checkpoints/
+*.pth
+*.onnx
+*.trt
+*.engine
+*.pt
+*.mlpackage/
+*.mlmodel/
+.ipynb_checkpoints/
+
+# Data (raw images/masks — keep split files)
+data/images/
+data/masks/
+data/ade20k_skywater/
+data/*.png
+data/*.jpg
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logging
+*.log
+runs/
+logs/
+
+# Caching
+.ruff_cache
+.pytest_cache
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Claude
+.claude/
+
+# Output / results
+outputs/
+output/
+
+# Third-party code
+thirdparty/
+scripts/eval_segformer_b2.py
+scripts/gen_readme_figures.py
+
+# Mics
+release/
+comparison_demo.png
+skywater_segformer_b2/
+
+# Scripts
+scripts/benchmark_full.py
+scripts/benchmark_resolutions.py
+scripts/compare_resolutions.py
+results/benchmark_resolutions/
+results/resolution_comparison/
