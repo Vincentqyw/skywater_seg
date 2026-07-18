@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sky-Water-Person Segmentation Pipeline — a three-phase system that automatically generates segmentation masks (Grounding DINO + SAM), trains a lightweight model on them, and deploys for fast inference. Built for NVIDIA GPUs and Apple Silicon (MPS/CoreML), managed with `uv`.
+Sky-Water-Person Segmentation — fine-tuned SegFormer B2 for masking sky, water, and person regions in images. Built for NVIDIA GPUs and Apple Silicon (MPS/CoreML), managed with `uv`.
 
 **Target:** Mask out sky, water, and person regions in images to eliminate their interference with SfM (Structure from Motion) and image matching pipelines.
 

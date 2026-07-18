@@ -4,8 +4,8 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Hugging Face](https://img.shields.io/badge/🤗-Model_on_HF-orange.svg)](https://huggingface.co/Realcat/skywater_seg)
 
-**Auto-annotation → training → deployment.** Mask out sky, water, and person
-regions to eliminate interference in SfM and image matching pipelines.
+**Fine-tuned SegFormer B2** for sky, water, and person segmentation.  
+Pre-filter images for robust Structure-from-Motion and image matching.
 
 <p align="center">
   <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
@@ -52,11 +52,11 @@ uv sync
 ```
 
 ```python
-from skywater_seg import load_model, segment, overlay_mask
+from skywater_seg import load_model, segment_skywater, overlay_mask
 
-model = load_model()                         # from HuggingFace, auto-download
-mask  = segment_skywater("photo.jpg", model)          # 0=bg, 1=sky, 2=water, 3=person
-overlay_mask("photo.jpg", mask)              # visualize
+model = load_model()
+mask  = segment_skywater("photo.jpg", model)   # 0=bg, 1=sky, 2=water, 3=person
+overlay_mask("photo.jpg", mask)                # visualize
 ```
 
 ```bash
@@ -123,7 +123,6 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 
 | Guide | Description |
 |-------|-------------|
-| [Auto-Annotation](docs/auto_annotation.md) | Grounding DINO + SAM pipeline — generate masks from text prompts |
 | [Datasets](docs/datasets.md) | ADE20K setup, custom data format, multi-dataset training |
 | [Training](docs/training.md) | Model configs, presets, loss functions, architecture options |
 | [Evaluation & Benchmark](docs/evaluation.md) | Metrics, ONNX speed comparison, pixel identity validation |
@@ -155,19 +154,6 @@ skywater/
 ├── train.py               # Training entry point
 ├── inference.py           # Inference entry point
 └── pyproject.toml
-```
-
----
-
-## 🔧 Development
-
-```bash
-uv sync                          # Full env
-uv sync --group train            # Training only
-uv sync --group dev              # Dev tools (pytest, matplotlib)
-
-# Run tests
-uv run pytest tests/ -v
 ```
 
 ---
