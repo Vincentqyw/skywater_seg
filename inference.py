@@ -49,13 +49,13 @@ def main():
     # ---- Load model ----
     if args.hf:
         logger.info("Loading from HuggingFace: Realcat/skywater_seg")
-        from skywater_seg.inference import load_model, segment
+        from skywater_seg.inference import load_model, segment_skywater
 
         model = load_model(args.device)
 
         class _HF:
             def predict(self, path, **_):
-                m = segment(path, model)
+                m = segment_skywater(path, model)
                 return {"mask": m, "sky_mask": m == 1, "water_mask": m == 2}
 
         infer = _HF()

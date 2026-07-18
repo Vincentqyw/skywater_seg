@@ -767,7 +767,7 @@ def load_model(device: str = "cuda") -> SkyWaterSegModel:
     return model.eval().to(device)
 
 
-def segment(
+def segment_skywater(
     image: Union[str, np.ndarray],
     model: Optional[SkyWaterSegModel] = None,
     device: str = "cuda",

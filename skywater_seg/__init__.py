@@ -12,7 +12,7 @@ from skywater_seg.inference import (
     convert_onnx_fp16,
     export_onnx,
     load_model,
-    segment,
+    segment_skywater,
 )
 
 # ── Model ─────────────────────────────────────────────────────────────

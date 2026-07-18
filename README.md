@@ -55,7 +55,7 @@ uv sync
 from skywater_seg import load_model, segment, overlay_mask
 
 model = load_model()                         # from HuggingFace, auto-download
-mask  = segment("photo.jpg", model)          # 0=bg, 1=sky, 2=water, 3=person
+mask  = segment_skywater("photo.jpg", model)          # 0=bg, 1=sky, 2=water, 3=person
 overlay_mask("photo.jpg", mask)              # visualize
 ```
 
