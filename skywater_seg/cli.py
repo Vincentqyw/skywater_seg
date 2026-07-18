@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 CLI entry points for uv-managed package scripts.
 

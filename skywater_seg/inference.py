@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Inference and model export for sky/water segmentation.
 
@@ -11,7 +13,7 @@ Features:
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -20,11 +22,8 @@ import torch.nn.functional as F
 from loguru import logger
 
 from skywater_seg.config import Config
-from skywater_seg.model import create_model
+from skywater_seg.model import SkyWaterSegModel, create_model
 from skywater_seg.utils import configure_backend, get_device
-
-if TYPE_CHECKING:
-    from skywater_seg.model import SkyWaterSegModel
 
 
 class SegmentationInference:
@@ -755,7 +754,7 @@ def _config_from_meta(meta: dict, fallback: Optional[Config] = None) -> Config:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def load_model(device: str = "cuda") -> "SkyWaterSegModel":
+def load_model(device: str = "cuda") -> SkyWaterSegModel:
     """Load the SegFormer B2 model from HuggingFace.
 
     Args:
@@ -764,15 +763,13 @@ def load_model(device: str = "cuda") -> "SkyWaterSegModel":
     Returns:
         Model in eval mode on the requested device.
     """
-    from skywater_seg.model import SkyWaterSegModel
-
     model = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
     return model.eval().to(device)
 
 
 def segment(
     image: Union[str, np.ndarray],
-    model: Optional["SkyWaterSegModel"] = None,
+    model: Optional[SkyWaterSegModel] = None,
     device: str = "cuda",
 ) -> np.ndarray:
     """Segment an image and return the class-index mask.

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Training loop for sky/water segmentation.
 
@@ -22,6 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from skywater_seg.config import Config
+from skywater_seg.dataset import create_dataloaders
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
 from skywater_seg.utils import (
@@ -610,8 +613,6 @@ class Trainer:
 
 def train(config: Config):
     """Entry point: create dataloaders and run training."""
-    from skywater_seg.dataset import create_dataloaders
-
     logger.info("Creating dataloaders...")
     train_loader, val_loader = create_dataloaders(config)
     logger.info(f"Train: {len(train_loader.dataset):,} samples, {len(train_loader)} batches")

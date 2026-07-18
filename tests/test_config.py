@@ -148,7 +148,7 @@ class TestRealConfigs:
         "configs/models/convnext_dinov3.yaml",
         "configs/models/mobilenetv3_flatdir.yaml",
         "configs/datasets/ade20k_full.yaml",
-        "configs/datasets/ade20k.yaml",
+        "configs/datasets/ade20k_person.yaml",
         "configs/datasets/multi_dataset.yaml",
     ]
 

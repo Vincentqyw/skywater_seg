@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 PyTorch Dataset for sky/water/person segmentation.
 
@@ -9,17 +11,14 @@ Supports:
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from skywater_seg.config import Config
-
-if TYPE_CHECKING:
-    from skywater_seg.config import DataConfig
+from skywater_seg.config import Config, DataConfig
 
 # ── Robust image/mask loading (PIL-based, avoid OpenCV JP2 decode issues) ──
 
@@ -102,7 +101,7 @@ class SkyWaterDataset(Dataset):
         image_size: Tuple[int, int] = (512, 512),
         num_classes: int = 4,
         augmentation: bool = False,
-        config: Optional["DataConfig"] = None,
+        config: Optional[DataConfig] = None,
         file_list: Optional[List[str]] = None,
         class_mapping: Optional[Dict[int, int]] = None,
         cityscapes: bool = False,
@@ -172,7 +171,7 @@ class SkyWaterDataset(Dataset):
         else:
             self.transform = None
 
-    def _build_transforms(self, cfg: "DataConfig"):
+    def _build_transforms(self, cfg: DataConfig):
         import albumentations as A
 
         h, w = self.image_size
@@ -507,7 +506,7 @@ def create_dataloaders(
 class _AugmentedWrapper(Dataset):
     """Wraps a random_split subset with augmentation enabled."""
 
-    def __init__(self, dataset, base_dataset, config: "DataConfig"):
+    def __init__(self, dataset, base_dataset, config: DataConfig):
         self.dataset = dataset
         self.base = base_dataset
         self.image_size = base_dataset.image_size

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Configuration management for training and inference.
 

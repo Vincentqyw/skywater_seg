@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Loss functions for semantic segmentation.
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Model factory for sky/water segmentation.
 
