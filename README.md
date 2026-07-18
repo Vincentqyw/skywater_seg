@@ -56,7 +56,7 @@ from skywater_seg import load_model, segment, overlay_mask
 
 model = load_model()                         # from HuggingFace, auto-download
 mask  = segment("photo.jpg", model)          # 0=bg, 1=sky, 2=water, 3=person
-overlay_mask("photo.jpg", mask)            # visualize
+overlay_mask("photo.jpg", mask)              # visualize
 ```
 
 ```bash
@@ -186,4 +186,4 @@ uv run pytest tests/ -v
 
 ## 📄 License
 
-MIT — [Vincent Qin](https://github.com/Vincentqyw)
+MIT

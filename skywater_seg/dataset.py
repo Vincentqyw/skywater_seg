@@ -307,9 +307,9 @@ class MultiDataset(Dataset):
         self._lengths = [len(d) for d in datasets]
         self._offsets = []
         offset = 0
-        for l in self._lengths:
+        for length in self._lengths:
             self._offsets.append(offset)
-            offset += l
+            offset += length
 
     def __len__(self) -> int:
         return sum(self._lengths)
@@ -520,8 +520,6 @@ class _AugmentedWrapper(Dataset):
         indices = self.dataset.indices
         original_idx = indices[idx]
         image_name = self.base.images[original_idx]
-        stem = Path(image_name).stem
-
         image_path = self.base.image_dir / image_name
         image = _load_image_robust(str(image_path))
         if image is None:
