@@ -2,25 +2,36 @@
 """
 Gradio UI for sky-water-person segmentation inference.
 
-Usage:
-    uv run python scripts/gradio_app.py                          # HF Hub model (default)
-    uv run python scripts/gradio_app.py --local checkpoint.pth   # local checkpoint
-    uv run python scripts/gradio_app.py --onnx model.onnx        # ONNX Runtime
-    uv run python scripts/gradio_app.py --share                  # public link
+Usage (local):
+    uv run python app.py                          # HF Hub model (default)
+    uv run python app.py --local checkpoint.pth   # local checkpoint
+    uv run python app.py --onnx model.onnx        # ONNX Runtime
+    uv run python app.py --share                  # public link
 
-Dependencies (install before first run):
-    uv add gradio
+HuggingFace Spaces:
+    Detected automatically via SPACE_ID env var — no CLI needed.
+    Uses @spaces.GPU for GPU acceleration.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import time
 
 import cv2
 import numpy as np
 
 import gradio as gr
+
+# HF Spaces GPU support (no-op when running locally without the package)
+try:
+    import spaces
+
+    _HAS_SPACES = True
+except ImportError:
+    spaces = None  # type: ignore[assignment]
+    _HAS_SPACES = False
 
 # Project imports
 from skywater_seg.inference import segment_skywater, SkyWaterSegModel
@@ -30,6 +41,9 @@ from skywater_seg.visualization import (
     mask_to_color,
     overlay_mask,
 )
+
+# ── Detect runtime environment ─────────────────────────────────────────
+_ON_SPACES = bool(os.environ.get("SPACE_ID"))
 
 # ── Globals (set in main) ──────────────────────────────────────────────
 _MODEL = None
@@ -90,6 +104,11 @@ def run_inference(image: np.ndarray) -> np.ndarray:
     _CACHE_HASH = img_hash
     _CACHE_MASK = mask
     return mask
+
+
+# Wrap with HF Spaces GPU decorator when available
+if _HAS_SPACES:
+    run_inference = spaces.GPU(run_inference)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -261,6 +280,14 @@ footer { display: none !important; }
 """
 
 
+# Asset base path — local on dev, GitHub raw URLs on HF Spaces (no binary storage)
+_ASSET_BASE = (
+    "https://raw.githubusercontent.com/Vincentqyw/skywater/main/assets"
+    if _ON_SPACES
+    else "assets"
+)
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="SkyWater Segmentation") as demo:
         gr.Markdown(HEADER_MD)
@@ -282,16 +309,16 @@ def build_ui() -> gr.Blocks:
 
                 gr.Examples(
                     examples=[
-                        "assets/hk.jpg",
-                        "assets/264489593_6de914a0ab_o.jpg",
-                        "assets/3134760025_0aaa4fdc8b_o.jpg",
-                        "assets/331810308_2fe422b1ec_o.jpg",
-                        "assets/525678483_c9b1a3665a_o.jpg",
-                        "assets/981256188_8f690e95b1_o.jpg",
-                        "assets/0015_096.jpg",
-                        "assets/ade_ADE_val_00000590.jpg",
-                        "assets/ade_ADE_val_00001354.jpg",
-                        "assets/ade_ADE_val_00001674.jpg",
+                        f"{_ASSET_BASE}/hk.jpg",
+                        f"{_ASSET_BASE}/264489593_6de914a0ab_o.jpg",
+                        f"{_ASSET_BASE}/3134760025_0aaa4fdc8b_o.jpg",
+                        f"{_ASSET_BASE}/331810308_2fe422b1ec_o.jpg",
+                        f"{_ASSET_BASE}/525678483_c9b1a3665a_o.jpg",
+                        f"{_ASSET_BASE}/981256188_8f690e95b1_o.jpg",
+                        f"{_ASSET_BASE}/0015_096.jpg",
+                        f"{_ASSET_BASE}/ade_ADE_val_00000590.jpg",
+                        f"{_ASSET_BASE}/ade_ADE_val_00001354.jpg",
+                        f"{_ASSET_BASE}/ade_ADE_val_00001674.jpg",
                     ],
                     inputs=input_img,
                     label="📸 Examples",
@@ -361,9 +388,48 @@ def build_ui() -> gr.Blocks:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def main():
+def _load_model(local_path: str | None = None, onnx_path: str | None = None):
+    """Load the segmentation model from HF Hub, local checkpoint, or ONNX."""
     global _MODEL, _ONNX_INFER, _USE_ONNX
 
+    if onnx_path:
+        print(f"Loading ONNX model: {onnx_path}")
+        from skywater_seg.inference import ONNXRuntimeInference
+
+        _ONNX_INFER = ONNXRuntimeInference(onnx_path, provider="cuda")
+        _USE_ONNX = True
+        print(f"  ONNX Runtime ready — providers: {_ONNX_INFER.providers}")
+    elif local_path:
+        print(f"Loading local checkpoint: {local_path}")
+        from skywater_seg.inference import SegmentationInference
+
+        _MODEL = SegmentationInference(local_path).model
+    else:
+        print("Loading model from HuggingFace Hub: Realcat/skywater_seg")
+        _MODEL = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
+        _MODEL.eval()
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            _MODEL.to(device)
+            print(f"  Model on: {device}")
+        except Exception:
+            pass
+
+
+def main():
+    _load_model()
+
+    demo = build_ui()
+    demo.launch(
+        show_error=True,
+        theme=gr.themes.Soft(primary_hue="orange", secondary_hue="blue"),
+        css=GRADIO_CSS,
+    )
+
+
+def main_cli():
+    """Local CLI entry point with argparse (not used on HF Spaces)."""
     parser = argparse.ArgumentParser(
         description="Gradio UI for Sky-Water-Person Segmentation",
     )
@@ -381,32 +447,8 @@ def main():
     parser.add_argument("--port", type=int, default=7860, help="Server port (default: 7860)")
     args = parser.parse_args()
 
-    # ── Load model ────────────────────────────────────────────────────
-    if args.onnx:
-        print(f"Loading ONNX model: {args.onnx}")
-        from skywater_seg.inference import ONNXRuntimeInference
+    _load_model(local_path=args.local, onnx_path=args.onnx)
 
-        _ONNX_INFER = ONNXRuntimeInference(args.onnx, provider="cuda")
-        _USE_ONNX = True
-        print(f"  ONNX Runtime ready — providers: {_ONNX_INFER.providers}")
-    elif args.local:
-        print(f"Loading local checkpoint: {args.local}")
-        from skywater_seg.inference import SegmentationInference
-
-        _MODEL = SegmentationInference(args.local).model
-    else:
-        print("Loading model from HuggingFace Hub: Realcat/skywater_seg")
-        _MODEL = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
-        _MODEL.eval()
-        try:
-            import torch
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            _MODEL.to(device)
-            print(f"  Model on: {device}")
-        except Exception:
-            pass
-
-    # ── Launch ────────────────────────────────────────────────────────
     demo = build_ui()
     demo.launch(
         server_name=args.host,
@@ -419,4 +461,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if _ON_SPACES:
+        # HuggingFace Spaces: no CLI, Gradio handles host/port automatically
+        print("🚀 Running on HuggingFace Spaces")
+        main()
+    else:
+        main_cli()
