@@ -9,7 +9,6 @@ Logging:
 
 Usage: python train.py --config configs/ade20k.yaml
 """
-
 import sys
 import warnings
 from pathlib import Path

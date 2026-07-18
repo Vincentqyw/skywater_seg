@@ -61,7 +61,7 @@ __all__ = [
     "export_onnx",
     "convert_onnx_fp16",
     "load_model",
-    "segment",
+    "segment_skywater",
     # visualization
     "CLASS_COLORS_RGB",
     "CLASS_NAMES",

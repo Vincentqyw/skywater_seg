@@ -8,7 +8,7 @@
 regions to eliminate interference in SfM and image matching pipelines.
 
 <p align="center">
-  <img src="assets/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
+  <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
 </p>
 
 
@@ -38,7 +38,7 @@ regions to eliminate interference in SfM and image matching pipelines.
 | PyTorch FP32 | 23.0 ms | baseline |
 
 <p align="center">
-  <img src="assets/speed_full.png" width="80%" alt="Speed comparison">
+  <img src="results/onnx_benchmark/speed_full.png" width="80%" alt="Speed comparison">
 </p>
 
 ---

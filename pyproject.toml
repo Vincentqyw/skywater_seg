@@ -91,3 +91,4 @@ torchvision = { index = "pytorch-cu124" }
 
 [tool.ruff]
 line-length = 100
+ignore = ["E501", "E402"]

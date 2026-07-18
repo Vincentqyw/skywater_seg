@@ -3,7 +3,6 @@ from __future__ import annotations
 """
 Utility functions: metrics, visualization, logging, device management.
 """
-
 import random
 import time
 from pathlib import Path

@@ -7,7 +7,6 @@ Dataclasses define the typed schema.  OmegaConf handles YAML loading,
 saving, and CLI-override merging — so ``!!python/tuple`` tags are gone
 and dot-notation overrides are type-coerced automatically.
 """
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple

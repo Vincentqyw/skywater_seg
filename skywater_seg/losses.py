@@ -10,7 +10,6 @@ Provides standard and combined losses suitable for sky/water segmentation:
   - Combined Dice + CE Loss
   - Jaccard (IoU) Loss
 """
-
 from typing import Optional
 
 import torch

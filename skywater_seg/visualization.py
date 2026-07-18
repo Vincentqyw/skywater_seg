@@ -472,9 +472,11 @@ def tensor_to_image(
     """
     if mean is None:
         from skywater_seg.inference import ONNXRuntimeInference
+
         mean = ONNXRuntimeInference.MEAN
     if std is None:
         from skywater_seg.inference import ONNXRuntimeInference
+
         std = ONNXRuntimeInference.STD
 
     if tensor.dim() == 4:

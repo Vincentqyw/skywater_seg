@@ -8,7 +8,6 @@ Usage:
   skywater-train --config configs/models/mobilenetv3_flatdir.yaml
   skywater-infer --checkpoint model.pth --input test.jpg
 """
-
 import sys
 from pathlib import Path
 
