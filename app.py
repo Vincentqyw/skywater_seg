@@ -233,16 +233,8 @@ Upload an image to segment **sky**, **water**, and **person** regions—designed
 GRADIO_CSS = """
 footer { display: none !important; }
 
-/* Force side-by-side layout at all viewport widths (HF Spaces iframe compat) */
-.gr-row {
-    flex-wrap: nowrap !important;
-    min-width: 900px !important;
-}
-
 /* Input panel card */
 #input-col {
-    min-width: 320px !important;
-    flex-shrink: 0 !important;
     background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%) !important;
     border: 1px solid #313244 !important;
     border-radius: 12px !important;
@@ -317,20 +309,42 @@ def build_ui() -> gr.Blocks:
 
                 gr.Examples(
                     examples=[
-                        f"{_ASSET_BASE}/hk.jpg",
-                        f"{_ASSET_BASE}/264489593_6de914a0ab_o.jpg",
-                        f"{_ASSET_BASE}/3134760025_0aaa4fdc8b_o.jpg",
-                        f"{_ASSET_BASE}/331810308_2fe422b1ec_o.jpg",
-                        f"{_ASSET_BASE}/525678483_c9b1a3665a_o.jpg",
-                        f"{_ASSET_BASE}/981256188_8f690e95b1_o.jpg",
-                        f"{_ASSET_BASE}/0015_096.jpg",
-                        f"{_ASSET_BASE}/ade_ADE_val_00000590.jpg",
-                        f"{_ASSET_BASE}/ade_ADE_val_00001354.jpg",
-                        f"{_ASSET_BASE}/ade_ADE_val_00001674.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF5825.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF5827.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF6021.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF6049.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8778.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8781.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8790.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8858.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8917.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8980.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF8993.jpg",
+                        f"{_ASSET_BASE}/photos/DSCF9075.jpg",
+                        f"{_ASSET_BASE}/photos/hk.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_2613.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_2844.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_2955.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_3619.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_3621.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_4764.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_4954.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_5303.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_5464.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_6318.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7054.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7055.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7084.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7086.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7507.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7679.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_7714.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_8612.jpg",
+                        f"{_ASSET_BASE}/photos/IMG_8617.jpg",
                     ],
                     inputs=input_img,
                     label="📸 Examples",
-                    examples_per_page=10,
+                    examples_per_page=15,
                 )
 
             with gr.Column(scale=2):
