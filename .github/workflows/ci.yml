@@ -45,6 +45,4 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Lint with ruff
-        run: |
-          uv pip install ruff
-          uv run ruff check skywater_seg/ --ignore=E501,E402
+        run: uvx ruff check skywater_seg/ tests/ --ignore=E501,E402
