@@ -233,8 +233,16 @@ Upload an image to segment **sky**, **water**, and **person** regions—designed
 GRADIO_CSS = """
 footer { display: none !important; }
 
+/* Force side-by-side layout at all viewport widths (HF Spaces iframe compat) */
+.gr-row {
+    flex-wrap: nowrap !important;
+    min-width: 900px !important;
+}
+
 /* Input panel card */
 #input-col {
+    min-width: 320px !important;
+    flex-shrink: 0 !important;
     background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%) !important;
     border: 1px solid #313244 !important;
     border-radius: 12px !important;
