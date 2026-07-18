@@ -1,0 +1,78 @@
+# ============================================================
+# Quick-start: custom flat-dir dataset, 3-class (bg/sky/water)
+# ============================================================
+# MobileNetV3-Large -- ~5M params, good cost-performance.
+# For your own image+mask data in flat directories.
+
+experiment_name: skywater-seg
+output_dir: ./checkpoints
+seed: 42
+device: cuda
+
+# ---- Dataset ----
+data:
+  image_dir: ./data/images                           # Path to RGB images
+  mask_dir: ./data/masks                             # Path to mask PNGs (0=bg, 1=sky, 2=water)
+  train_split: ""                                    # Path to train.txt (auto-split if empty)
+  val_split: ""
+  val_ratio: 0.15                                    # Fraction for validation (if no split file)
+  image_size: [512, 512]                             # [height, width]
+  num_classes: 3                                     # 0: background, 1: sky, 2: water
+  ignore_index: 255
+
+  augmentation: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.05
+  horizontal_flip: 0.5
+  vertical_flip: 0.0                                 # Don't flip vertically -- sky is on top
+  rotation: 10.0                                     # Max rotation in degrees
+  scale: [0.8, 1.2]                                  # Random resize crop scale range
+
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+# ---- Model Architecture ----
+model:
+  name: deeplabv3plus
+  encoder_name: timm-mobilenetv3_large_100           # Lightweight backbone (~5M params)
+  encoder_weights: imagenet
+  in_channels: 3
+  classes: 3
+  encoder_output_stride: 16
+  decoder_channels: 256
+  decoder_atrous_rates: [12, 24, 36]
+
+# ---- Training ----
+train:
+  batch_size: 16
+  epochs: 100
+  learning_rate: 0.0001                              # 1e-4 is a good starting point
+  weight_decay: 0.0001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+
+  scheduler: cosine
+  lr_min: 0.000001
+  lr_warmup_epochs: 5
+
+  loss: dice_ce
+  ce_weight: 0.5
+  dice_weight: 0.5
+  class_weights: null                                # Optional e.g. [0.5, 2.0, 2.0]
+
+  mixed_precision: true
+  gradient_accumulation: 1
+  grad_clip: 1.0
+  num_workers: 4
+
+  val_every: 1
+  save_every: 10
+  early_stopping_patience: 20
+
+  log_every: 20
+  tensorboard: true
+  wandb: false
+
+  resume_from: ""

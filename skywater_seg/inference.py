@@ -196,21 +196,10 @@ class SegmentationInference:
         return results
 
     def _preprocess(self, image_rgb: np.ndarray) -> torch.Tensor:
-        """Preprocess image for model input:
-        Resize, normalize (ImageNet stats), convert to tensor.
-        """
+        """Resize, normalize (ImageNet stats), convert to NCHW tensor."""
         h, w = self.image_size
-
-        # Resize
         image = cv2.resize(image_rgb, (w, h), interpolation=cv2.INTER_LINEAR)
-
-        # Normalize
-        image = image.astype(np.float32) / 255.0
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        image = (image - mean) / std
-
-        # To tensor (C, H, W)
+        image = (image.astype(np.float32) / 255.0 - ONNXRuntimeInference.MEAN) / ONNXRuntimeInference.STD
         tensor = torch.from_numpy(image.transpose(2, 0, 1)).float().unsqueeze(0)
         return tensor
 
@@ -342,75 +331,380 @@ class SegmentationInference:
 
 
 class ONNXRuntimeInference:
-    """Lightweight inference using ONNX Runtime (no PyTorch dependency).
+    """ONNX Runtime inference with explicit GPU/CPU provider control.
 
-    Usage:
-        infer = ONNXRuntimeInference("model.onnx")
-        result = infer.predict("image.jpg")
+    Supports FP32 and FP16 ONNX models.  For FP16 models, pass
+    ``provider="cuda"`` and the CUDAExecutionProvider will use FP16 math
+    automatically when the model contains FP16 weights.
+
+    Usage::
+
+        # NVIDIA GPU (CUDA / TensorRT)
+        infer = ONNXRuntimeInference("model.onnx", provider="cuda")
+
+        # Apple Silicon (CoreML / Neural Engine)
+        infer = ONNXRuntimeInference("model.onnx", provider="coreml")
+
+        # AMD GPU
+        infer = ONNXRuntimeInference("model.onnx", provider="rocm")
+
+        # Intel CPU/GPU
+        infer = ONNXRuntimeInference("model.onnx", provider="openvino")
+
+        # Windows GPU (DirectML)
+        infer = ONNXRuntimeInference("model.onnx", provider="dml")
+
+        # CPU only
+        infer = ONNXRuntimeInference("model.onnx", provider="cpu")
+
+        # Single image
+        result = infer.predict("image.jpg")         # str path or np.ndarray
+        mask   = result["mask"]                     # (H, W) uint8
+        sky    = result["sky_mask"]                 # (H, W) bool
+
+        # Batch inference
+        results = infer.predict_batch(["a.jpg", "b.jpg"], batch_size=4)
     """
 
-    def __init__(self, onnx_path: str):
+    _PROVIDER_MAP = {
+        "cpu": "CPUExecutionProvider",
+        "cuda": "CUDAExecutionProvider",
+        "tensorrt": "TensorrtExecutionProvider",
+        "coreml": "CoreMLExecutionProvider",      # Apple Silicon / Neural Engine
+        "rocm": "ROCMExecutionProvider",           # AMD GPU
+        "openvino": "OpenVINOExecutionProvider",   # Intel CPU/GPU
+        "dml": "DmlExecutionProvider",             # DirectML (Windows GPU)
+        "acl": "ACLExecutionProvider",             # ARM Compute Library
+    }
+
+    # ImageNet normalisation (same as training)
+    MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+    def __init__(
+        self,
+        onnx_path: str,
+        provider: str = "cuda",
+        *,
+        input_size: Optional[Tuple[int, int]] = None,
+    ):
+        """Create an ONNX Runtime inference session.
+
+        Args:
+            onnx_path: Path to ``.onnx`` file (FP32 or FP16).
+            provider: ``"cuda"`` | ``"cpu"`` | ``"tensorrt"`` | ``"coreml"`` |
+                      ``"rocm"`` | ``"openvino"`` | ``"dml"`` | ``"acl"``.
+                      Falls back to CPU if the requested provider is
+                      not available.
+            input_size: Override the (height, width) inferred from
+                        the ONNX graph (rarely needed).
+        """
         try:
             import onnxruntime as ort
         except ImportError:
             raise ImportError(
                 "onnxruntime is required. Install with: pip install onnxruntime"
             )
+        ep = self._PROVIDER_MAP.get(provider, provider)
+        available = ort.get_available_providers()
+        if ep not in available:
+            logger.warning(
+                f"Provider '{ep}' not available (available: {available}). "
+                f"Falling back to CPU."
+            )
+            ep = "CPUExecutionProvider"
 
-        self.session = ort.InferenceSession(
-            onnx_path,
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-        )
+        sess_opts = ort.SessionOptions()
+        sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        # Get input/output info
+        providers = [ep] if ep == "CPUExecutionProvider" else [ep, "CPUExecutionProvider"]
+        self.session = ort.InferenceSession(onnx_path, sess_opts, providers=providers)
+        self._providers = self.session.get_providers()
+
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
-        input_shape = self.session.get_inputs()[0].shape
+        in_shape = self.session.get_inputs()[0].shape
 
-        # Input shape: (batch, 3, height, width) or (batch, 3, "height", "width")
-        self.input_h = input_shape[2] if isinstance(input_shape[2], int) else 512
-        self.input_w = input_shape[3] if isinstance(input_shape[3], int) else 512
+        if input_size is not None:
+            self.input_h, self.input_w = input_size
+        else:
+            self.input_h = int(in_shape[2]) if isinstance(in_shape[2], int) else 512
+            self.input_w = int(in_shape[3]) if isinstance(in_shape[3], int) else 512
 
         logger.info("ONNX Runtime session ready")
-        logger.info(f"  Input: {self.input_name} {input_shape}")
-        logger.info(f"  Providers: {self.session.get_providers()}")
+        logger.info(f"  Input: {self.input_name} {in_shape}")
+        logger.info(f"  Providers: {self._providers}")
 
-    def predict(self, image: Union[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        """Run inference on a single image."""
-        # Load image
+    # -- public properties -------------------------------------------------
+
+    @property
+    def providers(self) -> List[str]:
+        """Active execution providers for this session."""
+        return list(self._providers)
+
+    @property
+    def input_size(self) -> Tuple[int, int]:
+        """Model input size as ``(height, width)``."""
+        return (self.input_h, self.input_w)
+
+    # -- preprocessing -----------------------------------------------------
+
+    @staticmethod
+    def preprocess(
+        image_rgb: np.ndarray,
+        input_size: Tuple[int, int] = (384, 384),
+    ) -> np.ndarray:
+        """Resize + ImageNet-normalise an RGB image to NCHW numpy array.
+
+        Args:
+            image_rgb: ``(H, W, 3)`` uint8 RGB image.
+            input_size: ``(height, width)`` to resize to.
+
+        Returns:
+            ``(1, 3, H, W)`` float32 numpy array.
+        """
+        h, w = input_size
+        img = cv2.resize(image_rgb, (w, h), interpolation=cv2.INTER_LINEAR)
+        img = img.astype(np.float32) / 255.0
+        img = (img - ONNXRuntimeInference.MEAN) / ONNXRuntimeInference.STD
+        return img.transpose(2, 0, 1)[np.newaxis, ...]
+
+    # -- inference ---------------------------------------------------------
+
+    def predict(
+        self,
+        image: Union[str, np.ndarray],
+        return_probabilities: bool = False,
+    ) -> Dict[str, np.ndarray]:
+        """Run inference on a single image.
+
+        Args:
+            image: Path to an image file, or an RGB/BGR numpy array
+                   of shape ``(H, W, 3)``.
+            return_probabilities: If True, include ``"probs"`` key with
+                                  ``(C, H, W)`` float32 probability map.
+
+        Returns:
+            Dict with keys ``mask``, ``sky_mask``, ``water_mask``,
+            and optionally ``probs``.
+        """
+        # -- load ----------------------------------------------------------
         if isinstance(image, str):
             img_bgr = cv2.imread(image)
+            if img_bgr is None:
+                raise FileNotFoundError(f"Cannot read image: {image}")
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         else:
-            img_rgb = image[:, :, :3]
+            img_rgb = image
+            if img_rgb.shape[-1] == 4:
+                img_rgb = img_rgb[:, :, :3]
         orig_h, orig_w = img_rgb.shape[:2]
 
-        # Preprocess
-        img = cv2.resize(
-            img_rgb, (self.input_w, self.input_h), interpolation=cv2.INTER_LINEAR
-        )
-        img = img.astype(np.float32) / 255.0
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        img = (img - mean) / std
-        img = img.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, H, W)
+        # -- preprocess + forward ------------------------------------------
+        np_in = self.preprocess(img_rgb, (self.input_h, self.input_w))
+        logits = self.session.run([self.output_name], {self.input_name: np_in})[0]
 
-        # Inference
-        logits = self.session.run([self.output_name], {self.input_name: img})[0]
-
-        # Resize to original
-        logits_tensor = torch.from_numpy(logits)
-        logits_tensor = F.interpolate(
-            logits_tensor, size=(orig_h, orig_w),
+        # -- resize to original --------------------------------------------
+        logits_t = torch.from_numpy(logits)
+        logits_t = F.interpolate(
+            logits_t, size=(orig_h, orig_w),
             mode="bilinear", align_corners=False,
         )
-        mask = torch.argmax(logits_tensor, dim=1)[0].numpy().astype(np.uint8)
+        # argmax(logits) == argmax(softmax(logits)) — skip softmax for speed
+        mask = torch.argmax(logits_t, dim=1)[0].numpy().astype(np.uint8)
 
-        return {
+        result: Dict[str, np.ndarray] = {
             "mask": mask,
             "sky_mask": (mask == 1),
             "water_mask": (mask == 2),
         }
+        if return_probabilities:
+            probs = F.softmax(logits_t, dim=1)
+            result["probs"] = probs[0].numpy().astype(np.float32)
+        return result
+
+    def predict_batch(
+        self,
+        images: List[Union[str, np.ndarray]],
+        batch_size: int = 8,
+    ) -> List[Dict[str, np.ndarray]]:
+        """Run inference on a batch of images.
+
+        Args:
+            images: List of image paths or numpy arrays.
+            batch_size: Number of images to process at once.
+
+        Returns:
+            List of result dicts (same format as :meth:`predict`).
+        """
+        results: List[Dict[str, np.ndarray]] = []
+
+        for i in range(0, len(images), batch_size):
+            batch_imgs = images[i : i + batch_size]
+
+            # Load + preprocess each image
+            batch_arrs = []
+            orig_sizes = []
+            for img in batch_imgs:
+                if isinstance(img, str):
+                    img_bgr = cv2.imread(img)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                else:
+                    img_rgb = img[:, :, :3]
+                orig_sizes.append(img_rgb.shape[:2])
+                batch_arrs.append(self.preprocess(img_rgb, (self.input_h, self.input_w)))
+
+            np_batch = np.concatenate(batch_arrs, axis=0)  # (B, 3, H, W)
+            logits = self.session.run([self.output_name], {self.input_name: np_batch})[0]
+
+            # Process each image in the batch
+            for j, (oh, ow) in enumerate(orig_sizes):
+                lt = torch.from_numpy(logits[j:j+1])
+                lt = F.interpolate(lt, size=(oh, ow), mode="bilinear",
+                                   align_corners=False)
+                mask = torch.argmax(lt, dim=1)[0].numpy().astype(np.uint8)
+                results.append({
+                    "mask": mask,
+                    "sky_mask": (mask == 1),
+                    "water_mask": (mask == 2),
+                })
+
+        return results
+
+    def run_raw(self, np_input: np.ndarray) -> np.ndarray:
+        """Low-level ONNX forward pass — returns raw logits.
+
+        Args:
+            np_input: ``(B, 3, H, W)`` preprocessed float32 array.
+
+        Returns:
+            ``(B, C, H, W)`` logits array.
+        """
+        return self.session.run([self.output_name], {self.input_name: np_input})[0]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Standalone ONNX export helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+def export_onnx(
+    model: torch.nn.Module,
+    image_size: Tuple[int, int],
+    output_path: str,
+    *,
+    opset_version: int = 17,
+    dynamic_batch: bool = True,
+    simplify: bool = True,
+) -> str:
+    """Export a PyTorch segmentation model to ONNX FP32.
+
+    This is a standalone function — it does **not** require
+    :class:`SegmentationInference`.  Use it when you already have a
+    model object::
+
+        cfg = Config.from_yaml("config.yaml")
+        model = create_model(cfg)
+        model.load_state_dict(torch.load("ckpt.pth")["model_state_dict"])
+        export_onnx(model, cfg.data.image_size, "model.onnx")
+
+    Args:
+        model: PyTorch ``nn.Module`` in eval mode.
+        image_size: ``(height, width)`` input size.
+        output_path: Where to write the ``.onnx`` file.
+        opset_version: ONNX opset (≥ 17 recommended for SegFormer).
+        dynamic_batch: If True, support dynamic batch / height / width.
+        simplify: Run ``onnx-simplifier`` to fold constants and
+                  remove redundant ops.
+
+    Returns:
+        ``output_path``.
+    """
+    logger.info(f"Exporting ONNX → {output_path}")
+
+    h, w = image_size
+    model.eval()
+    model.to("cpu")
+
+    dummy = torch.randn(1, 3, h, w)
+
+    dynamic_axes = {}
+    if dynamic_batch:
+        dynamic_axes = {
+            "input": {0: "batch", 2: "height", 3: "width"},
+            "output": {0: "batch", 2: "height", 3: "width"},
+        }
+
+    torch.onnx.export(
+        model, dummy, output_path,
+        opset_version=opset_version,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes=dynamic_axes,
+        do_constant_folding=True,
+    )
+
+    import onnx
+
+    # Simplify
+    if simplify:
+        try:
+            from onnxsim import simplify as onnx_simplify
+            m = onnx.load(output_path)
+            m_simp, ok = onnx_simplify(m)
+            if ok:
+                onnx.save(m_simp, output_path)
+                logger.info("  ONNX simplified")
+            else:
+                logger.warning("  Simplification check failed; keeping original")
+        except ImportError:
+            logger.info("  onnx-simplifier not installed; skipping")
+
+    # Verify
+    onnx.checker.check_model(onnx.load(output_path))
+    sz = os.path.getsize(output_path) / 1e6
+    logger.info(f"  Model: {output_path} ({sz:.1f} MB)")
+    return output_path
+
+
+def convert_onnx_fp16(
+    onnx_fp32_path: str,
+    output_path: Optional[str] = None,
+) -> str:
+    """Convert an FP32 ONNX model to FP16.
+
+    Uses ``onnxconverter-common`` to cast weights and activations to
+    float16 while keeping I/O types as float32 (so callers don't need
+    to change their preprocessing).
+
+    Args:
+        onnx_fp32_path: Path to the FP32 ``.onnx`` file.
+        output_path: Destination path.  Defaults to
+                     ``{stem}_fp16.onnx``.
+
+    Returns:
+        Path to the FP16 ``.onnx`` file.
+    """
+    if output_path is None:
+        p = Path(onnx_fp32_path)
+        output_path = str(p.parent / f"{p.stem}_fp16.onnx")
+
+    import onnx
+
+    try:
+        from onnxconverter_common import float16 as oc_f16
+    except ImportError:
+        raise ImportError(
+            "onnxconverter-common is required for FP16 conversion. "
+            "Install with: pip install onnxconverter-common"
+        )
+
+    logger.info(f"Converting to FP16 → {output_path}")
+    m = onnx.load(onnx_fp32_path)
+    m_fp16 = oc_f16.convert_float_to_float16(m, keep_io_types=True)
+    onnx.save(m_fp16, output_path)
+    sz = os.path.getsize(output_path) / 1e6
+    logger.info(f"  FP16 model: {output_path} ({sz:.1f} MB)")
+    return output_path
 
 
 
@@ -439,42 +733,47 @@ def _config_from_meta(meta: dict, fallback: Optional[Config] = None) -> Config:
     return cfg
 
 
-def draw_overlay(
-    image: Union[str, np.ndarray],
-    mask: np.ndarray,
-    alpha: float = 0.4,
-) -> np.ndarray:
-    """Draw segmentation mask overlay with contour outlines.
+# ═══════════════════════════════════════════════════════════════════════
+# Simple high-level API
+# ═══════════════════════════════════════════════════════════════════════
 
-    Returns BGR image. Colors sourced from utils.CLASS_COLORS_RGB.
+def load_model(device: str = "cuda") -> "SkyWaterSegModel":
+    """Load the SegFormer B2 model from HuggingFace.
+
+    Args:
+        device: ``"cuda"``, ``"cpu"``, or ``"mps"``.
+
+    Returns:
+        Model in eval mode on the requested device.
     """
-    if isinstance(image, str):
-        img = cv2.imread(image)
-    else:
-        img = image
-        if img.shape[-1] == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    from skywater_seg.model import SkyWaterSegModel
+    model = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
+    return model.eval().to(device)
 
-    h, w = mask.shape
-    if img.shape[:2] != (h, w):
-        img = cv2.resize(img, (w, h))
 
-    colors_bgr = class_colors_bgr()
-    overlay = np.zeros_like(img)
+def segment(
+    image: Union[str, np.ndarray],
+    model: Optional["SkyWaterSegModel"] = None,
+    device: str = "cuda",
+) -> np.ndarray:
+    """Segment an image and return the class-index mask.
 
-    for cls_id, color in colors_bgr.items():
-        if cls_id == 0:
-            continue
-        overlay[mask == cls_id] = color
+    Args:
+        image: Path to image file, or RGB numpy array ``(H, W, 3)``.
+        model: Pre-loaded model (if None, loads from HuggingFace).
+        device: Device for inference.
 
-    vis = cv2.addWeighted(img, 1 - alpha, overlay, alpha, 0)
-
-    # Contour outlines (makes boundaries visible even at low alpha)
-    for cls_id, color in colors_bgr.items():
-        if cls_id == 0:
-            continue
-        binary = (mask == cls_id).astype(np.uint8) * 255
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(vis, contours, -1, color, 2)
-
-    return vis
+    Returns:
+        ``(H, W)`` uint8 mask: 0=background, 1=sky, 2=water, 3=person.
+    """
+    if model is None:
+        model = load_model(device)
+    img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB) if isinstance(image, str) else image[:, :, :3]
+    h, w = img.shape[:2]
+    t = torch.from_numpy(
+        (cv2.resize(img, model.image_size[::-1]).astype(np.float32) / 255.0
+         - ONNXRuntimeInference.MEAN) / ONNXRuntimeInference.STD
+    ).permute(2, 0, 1).unsqueeze(0).to(device)
+    with torch.no_grad():
+        logits = F.interpolate(model(t), size=(h, w), mode="bilinear")
+    return torch.argmax(logits, dim=1)[0].cpu().numpy().astype(np.uint8)

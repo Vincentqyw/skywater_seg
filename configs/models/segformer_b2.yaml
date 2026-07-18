@@ -1,15 +1,13 @@
 # ============================================================
-# ConvNeXt-Tiny + DINOv3 Distilled — High-quality segmentation
+# SegFormer MiT-B2 -- Transformer-based SOTA segmentation
 # ============================================================
-# DINOv3 (Meta, 2025) distilled ConvNeXt weights provide
-# substantially better feature representations than ImageNet.
+# Hierarchical Transformer encoder + lightweight MLP decoder.
+# Better boundary preservation than CNN decoders.
 #
-# Backbone:  ConvNeXt-Tiny  (~29M params)
-# Decoder:   DeepLabV3+
-# Pretrain:  DINOv3 LVD-1689M (Meta's large-scale distillation)
-# Classes:   0=bg, 1=sky, 2=water, 3=person
+# MiT-B2: 24.7M params (lighter than ConvNeXt-T 34M!)
+# Native SMP support, no custom code needed.
 
-experiment_name: skywater-convnext-dinov3
+experiment_name: skywater-segformer-b2
 output_dir: ./checkpoints
 seed: 42
 device: cuda
@@ -21,7 +19,7 @@ data:
   train_split: ./data/ade20k_person/train.txt
   val_split: ./data/ade20k_person/val.txt
   val_ratio: 0.15
-  image_size: [512, 512]
+  image_size: [384, 384]                           # Smaller for SegFormer speed (FLOPs -44%)
   num_classes: 4
   ignore_index: 255
 
@@ -49,22 +47,19 @@ data:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
 
-# ---- Model: ConvNeXt-Tiny + DINOv3 ----
+# ---- Model ----
 model:
-  name: deeplabv3plus
-  encoder_name: convnext-tiny                        # ConvNeXt-Tiny (custom encoder)
-  encoder_weights: dinov3                            # DINOv3 distilled (LVD-1689M)
+  name: segformer
+  encoder_name: mit_b2
+  encoder_weights: imagenet
   in_channels: 3
   classes: 4
-  encoder_output_stride: 16
-  decoder_channels: 256
-  decoder_atrous_rates: [12, 24, 36]
 
 # ---- Training (RTX 3060 6GB) ----
 train:
-  batch_size: 12                                     # ConvNeXt ~29M, need smaller batch
+  batch_size: 24                                     # 384x384 fits larger batch
   epochs: 80
-  learning_rate: 0.0001
+  learning_rate: 0.00006                             # Lower LR for transformer
   weight_decay: 0.0001
   optimizer: adamw
   betas: [0.9, 0.999]
@@ -76,12 +71,12 @@ train:
   loss: dice_ce
   ce_weight: 0.5
   dice_weight: 0.5
-  class_weights: [0.3, 2.0, 2.0, 2.0]           # penalize background, reward foreground
+  class_weights: [0.3, 2.0, 2.0, 2.0]
 
-  mixed_precision: true                              # AMP FP16
+  mixed_precision: true
   gradient_accumulation: 1
   grad_clip: 1.0
-  num_workers: 0                               # Windows: must be 0 to avoid shared memory errors
+  num_workers: 0
 
   val_every: 1
   save_every: 1

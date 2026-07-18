@@ -12,6 +12,7 @@ checkpoints/
 *.pt
 *.mlpackage/
 *.mlmodel/
+.ipynb_checkpoints/
 
 # Data (raw images/masks — keep split files)
 data/images/
@@ -53,3 +54,15 @@ output/
 thirdparty/
 scripts/eval_segformer_b2.py
 scripts/gen_readme_figures.py
+
+# Release
+release/
+comparison_demo.png
+
+
+scripts/benchmark_full.py
+scripts/benchmark_resolutions.py
+scripts/compare_resolutions.py
+results/benchmark_resolutions/
+results/onnx_benchmark/
+results/resolution_comparison/

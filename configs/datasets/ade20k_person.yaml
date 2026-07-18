@@ -1,23 +1,36 @@
 # ============================================================
-# Sky-Water Segmentation — ADE20K Training Config
+# ADE20K filtered split -- sky/water/person only (4-class)
 # ============================================================
-# Data extracted from ADE20K 2021 by scripts/extract_ade20k.py
-# 14,679 train + 1,190 val images with pixel-level sky/water masks
+# Uses pre-generated train.txt / val.txt from prepare_ade20k_person.py.
+# Run `uv run python scripts/prepare_ade20k_person.py` first to generate.
+# ~11K training images, ~900 validation.
 
-experiment_name: skywater-ade20k
+experiment_name: skywater-person-ade20k
 output_dir: ./checkpoints
 seed: 42
 device: cuda
 
+# ---- Dataset ----
 data:
-  image_dir: ./data/ade20k_skywater/images
-  mask_dir: ./data/ade20k_skywater/masks
-  train_split: ./data/ade20k_skywater/train.txt
-  val_split: ./data/ade20k_skywater/val.txt
+  image_dir: E:/datasets/ADEChallengeData2016/images
+  mask_dir: E:/datasets/ADEChallengeData2016/annotations
+  train_split: ./data/ade20k_person/train.txt
+  val_split: ./data/ade20k_person/val.txt
   val_ratio: 0.15
   image_size: [512, 512]
-  num_classes: 3
+  num_classes: 4                                     # 0=bg, 1=sky, 2=water, 3=person
   ignore_index: 255
+
+  class_mapping:
+    3: 1       # sky
+    22: 2      # water
+    27: 2      # sea
+    61: 2      # river
+    105: 2     # fountain
+    110: 2     # swimming pool
+    114: 2     # waterfall
+    129: 2     # lake
+    13: 3      # person
 
   augmentation: true
   brightness: 0.2
@@ -32,19 +45,21 @@ data:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
 
+# ---- Model (cost-effective: ~5M params) ----
 model:
   name: deeplabv3plus
   encoder_name: timm-mobilenetv3_large_100
   encoder_weights: imagenet
   in_channels: 3
-  classes: 3
+  classes: 4                                          # 4-class output
   encoder_output_stride: 16
   decoder_channels: 256
   decoder_atrous_rates: [12, 24, 36]
 
+# ---- Training ----
 train:
-  batch_size: 16
-  epochs: 100
+  batch_size: 24                                      # RTX 3060 6GB
+  epochs: 80
   learning_rate: 0.0001
   weight_decay: 0.0001
   optimizer: adamw
@@ -57,14 +72,14 @@ train:
   loss: dice_ce
   ce_weight: 0.5
   dice_weight: 0.5
+  class_weights: null
 
   mixed_precision: true
   gradient_accumulation: 1
   grad_clip: 1.0
   num_workers: 4
-  pin_memory: true
 
-  val_every: 1
+  val_every: 2
   save_every: 10
   early_stopping_patience: 20
 

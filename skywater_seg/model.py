@@ -18,6 +18,13 @@ from typing import Optional
 import torch.nn as nn
 from loguru import logger
 
+try:
+    from huggingface_hub import PyTorchModelHubMixin
+    _HAS_HF_HUB = True
+except ImportError:
+    PyTorchModelHubMixin = object  # type: ignore
+    _HAS_HF_HUB = False
+
 from skywater_seg.config import Config
 
 # ── Registry of extra timm encoders not built into SMP ──
@@ -225,6 +232,81 @@ def get_model_info(model: nn.Module) -> dict:
         "size_mb_float32": round(size_mb, 2),
         "size_mb_fp16": round(size_mb / 2, 2),
     }
+
+
+class SkyWaterSegModel(nn.Module, PyTorchModelHubMixin):
+    """Ready-to-use segmentation model with HuggingFace Hub integration.
+
+    Inherits ``from_pretrained`` / ``push_to_hub`` / ``save_pretrained``
+    via :class:`~huggingface_hub.PyTorchModelHubMixin`.
+
+    Usage::
+
+        # Download + load from HuggingFace
+        model = SkyWaterSegModel.from_pretrained("Realcat/skywater_seg")
+
+        # Or load from local checkpoint
+        model = SkyWaterSegModel.from_pretrained("./local/dir")
+
+        # Inference
+        with torch.no_grad():
+            logits = model(torch.randn(1, 3, 384, 384))
+    """
+
+    def __init__(
+        self,
+        model_name: str = "segformer",
+        encoder_name: str = "mit_b2",
+        encoder_weights: str = "imagenet",
+        classes: int = 4,
+        in_channels: int = 3,
+        encoder_output_stride: int = 16,
+        decoder_channels: int = 256,
+        decoder_atrous_rates: tuple = (12, 24, 36),
+        image_size: tuple = (384, 384),
+        **_kwargs,
+    ):
+        super().__init__()
+        self.model_name = model_name
+        self.encoder_name = encoder_name
+        self.encoder_weights = encoder_weights
+        self.classes = classes
+        self.in_channels = in_channels
+        self.encoder_output_stride = encoder_output_stride
+        self.decoder_channels = decoder_channels
+        self.decoder_atrous_rates = decoder_atrous_rates
+        self.image_size = image_size
+
+        import segmentation_models_pytorch as smp
+
+        if model_name == "segformer":
+            self._model = smp.Segformer(
+                encoder_name=encoder_name,
+                encoder_weights=encoder_weights,
+                in_channels=in_channels,
+                classes=classes,
+            )
+        elif model_name == "deeplabv3plus":
+            self._model = smp.DeepLabV3Plus(
+                encoder_name=encoder_name,
+                encoder_weights=encoder_weights,
+                in_channels=in_channels,
+                classes=classes,
+                encoder_output_stride=encoder_output_stride,
+                decoder_channels=decoder_channels,
+                decoder_atrous_rates=decoder_atrous_rates,
+            )
+        else:
+            self._model = smp.create_model(
+                arch=model_name,
+                encoder_name=encoder_name,
+                encoder_weights=encoder_weights,
+                in_channels=in_channels,
+                classes=classes,
+            )
+
+    def forward(self, x):
+        return self._model(x)
 
 
 PRESETS = {

@@ -31,6 +31,7 @@ warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*before.*optimize
 from skywater_seg.config import Config
 from skywater_seg.losses import get_loss
 from skywater_seg.model import create_model, get_model_info
+from skywater_seg.visualization import colorize_mask, overlay_mask, tensor_to_image
 from skywater_seg.utils import (
     CLASS_COLORS_RGB,
     compute_dice,
@@ -439,98 +440,58 @@ class Trainer:
 
     def _log_predictions(self, epoch: int, images: torch.Tensor,
                          masks: torch.Tensor, preds: torch.Tensor, max_samples: int = 8):
-        """Log GT vs Prediction overlays to TensorBoard with pseudo-color masks."""
+        """Log GT vs Prediction overlays to TensorBoard."""
         import cv2
 
         n = min(images.size(0), max_samples)
-        PALETTE = np.array([CLASS_COLORS_RGB[i] for i in range(4)], dtype=np.uint8)
+        SKY = np.array(CLASS_COLORS_RGB[1], dtype=np.uint8)
+        WTR = np.array(CLASS_COLORS_RGB[2], dtype=np.uint8)
+        PRS = np.array(CLASS_COLORS_RGB[3], dtype=np.uint8)
+        RED = np.array([255, 60, 60], dtype=np.uint8)
+        YLW = np.array([255, 220, 50], dtype=np.uint8)
+        DIM = np.array([30, 30, 30], dtype=np.uint8)
         FONT = cv2.FONT_HERSHEY_SIMPLEX
 
+        def _blend(bg, mask, alpha=0.45):
+            c = colorize_mask(mask).astype(np.float32)
+            return (bg.astype(np.float32) * (1 - alpha) + c * alpha).clip(0, 255).astype(np.uint8)
+
+        def _highlight(mask, cls_id, color):
+            out = np.full((*mask.shape, 3), DIM, dtype=np.uint8)
+            out[mask == cls_id] = color
+            return out
+
+        def _err(gt, pd, cls_id):
+            err = np.zeros((*gt.shape, 3), dtype=np.uint8)
+            err[(gt == cls_id) & (pd != cls_id)] = RED
+            err[(gt != cls_id) & (pd == cls_id)] = YLW
+            return err
+
+        def _label(im, text):
+            cv2.putText(im, text, (4, 14), FONT, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            return im
+
         for i in range(n):
-            img = tensor_to_image(images[i].cpu())
+            img = cv2.resize(tensor_to_image(images[i].cpu()),
+                             masks.shape[2:][::-1])
             gt = masks[i].cpu().numpy().astype(np.uint8)
             pd = preds[i].cpu().numpy().astype(np.uint8)
-            h, w = gt.shape
-            img = cv2.resize(img, (w, h))
 
-            def _pseudo(mask):
-                """Convert class-index mask to RGB pseudo-color image."""
-                return PALETTE[mask.clip(0, 3)]
-
-            def _overlay(bg, mask, alpha=0.45):
-                """Alpha-blend pseudo-color mask over background."""
-                color = _pseudo(mask).astype(np.float32)
-                bg_f = bg.astype(np.float32)
-                return (bg_f * (1 - alpha) + color * alpha).clip(0, 255).astype(np.uint8)
-
-            def _binary_color(mask, target_class, on_color, off_color=None):
-                """Return RGB image: target_class pixels in on_color, rest in off_color (or black)."""
-                h, w = mask.shape
-                if off_color is None:
-                    off_color = np.array([40, 40, 40], dtype=np.uint8)
-                out = np.full((h, w, 3), off_color, dtype=np.uint8)
-                out[mask == target_class] = on_color
-                return out
-
-            def _label(im, text, color=(255, 255, 255)):
-                cv2.putText(im, text, (4, 14), FONT, 0.4, color, 1, cv2.LINE_AA)
-                return im
-
-            # Row 1: Input | GT overlay | Pred overlay
-            gt_ov = _overlay(img, gt)
-            pd_ov = _overlay(img, pd)
-            _label(img, "Input")
-            cv2.putText(gt_ov, "GT", (4, 14), FONT, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-            cv2.putText(pd_ov, "Pred", (4, 14), FONT, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-
-            # Row 2: Sky (GT, Pred, Error map) — bright on dark gray bg
-            SKY = np.array([255, 140, 0])
-            RED = np.array([255, 60, 60])
-            YLW = np.array([255, 220, 50])
-            DIM = np.array([30, 30, 30])
-            sky_gt = _binary_color(gt, 1, SKY, DIM)
-            sky_pd = _binary_color(pd, 1, SKY, DIM)
-            sky_err = np.zeros((h, w, 3), dtype=np.uint8)
-            sky_err[(gt == 1) & (pd != 1)] = RED
-            sky_err[(gt != 1) & (pd == 1)] = YLW
-
-            # Row 3: Water
-            WTR = np.array([0, 200, 255])
-            water_gt = _binary_color(gt, 2, WTR, DIM)
-            water_pd = _binary_color(pd, 2, WTR, DIM)
-            water_err = np.zeros((h, w, 3), dtype=np.uint8)
-            water_err[(gt == 2) & (pd != 2)] = RED
-            water_err[(gt != 2) & (pd == 2)] = YLW
-
-            row1 = np.hstack([img, gt_ov, pd_ov])
-            row2 = np.hstack([
-                _label(sky_gt, "Sky GT"),
-                _label(sky_pd, "Sky Pred"),
-                _label(sky_err, "Sky Err (red=miss, yellow=false)"),
-            ])
-            row3 = np.hstack([
-                _label(water_gt, "Water GT"),
-                _label(water_pd, "Water Pred"),
-                _label(water_err, "Water Err (red=miss, yellow=false)"),
-            ])
-
+            row1 = np.hstack([_label(img.copy(), "Input"),
+                              _label(_blend(img, gt), "GT"),
+                              _label(_blend(img, pd), "Pred")])
+            row2 = np.hstack([_label(_highlight(gt, 1, SKY), "Sky GT"),
+                              _label(_highlight(pd, 1, SKY), "Sky Pred"),
+                              _label(_err(gt, pd, 1), "Sky Err (red=miss, yellow=false)")])
+            row3 = np.hstack([_label(_highlight(gt, 2, WTR), "Water GT"),
+                              _label(_highlight(pd, 2, WTR), "Water Pred"),
+                              _label(_err(gt, pd, 2), "Water Err (red=miss, yellow=false)")])
+            rows = [row1, row2, row3]
             if self.config.model.classes >= 4:
-                PRS = np.array([230, 50, 230])
-                person_gt = _binary_color(gt, 3, PRS, DIM)
-                person_pd = _binary_color(pd, 3, PRS, DIM)
-                person_err = np.zeros((h, w, 3), dtype=np.uint8)
-                person_err[(gt == 3) & (pd != 3)] = RED
-                person_err[(gt != 3) & (pd == 3)] = YLW
-                row4 = np.hstack([
-                    _label(person_gt, "Person GT"),
-                    _label(person_pd, "Person Pred"),
-                    _label(person_err, "Person Err (red=miss, yellow=false)"),
-                ])
-                grid = np.vstack([row1, row2, row3, row4])
-            else:
-                grid = np.vstack([row1, row2, row3])
-
-            self.writer.add_image(f"{TB_IMAGE}/sample_{i}", grid, epoch, dataformats="HWC")
+                rows.append(np.hstack([_label(_highlight(gt, 3, PRS), "Person GT"),
+                                       _label(_highlight(pd, 3, PRS), "Person Pred"),
+                                       _label(_err(gt, pd, 3), "Person Err (red=miss, yellow=false)")]))
+            self.writer.add_image(f"{TB_IMAGE}/sample_{i}", np.vstack(rows), epoch, dataformats="HWC")
 
     # ---- Internal helpers ----
 

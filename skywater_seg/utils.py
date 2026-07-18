@@ -13,23 +13,6 @@ import torch.nn.functional as F
 
 
 # ============================================================
-# Shared class-color palette (single source of truth)
-# ============================================================
-
-CLASS_COLORS_RGB = {
-    0: (0, 0, 0),         # background: black
-    1: (255, 140, 0),     # sky: orange
-    2: (0, 200, 255),     # water: cyan
-    3: (255, 60, 60),     # person: red
-}
-
-
-def class_colors_bgr() -> dict:
-    """Return the shared palette in BGR order for OpenCV functions."""
-    return {k: (b, g, r) for k, (r, g, b) in CLASS_COLORS_RGB.items()}
-
-
-# ============================================================
 # Metrics
 # ============================================================
 
@@ -115,64 +98,17 @@ def compute_pixel_accuracy(
 
 
 # ============================================================
-# Visualization
+# Visualization (canonical implementations in skywater_seg.visualization)
 # ============================================================
 
-def tensor_to_image(tensor: torch.Tensor, mean=None, std=None) -> np.ndarray:
-    """Convert normalized tensor to displayable RGB image.
-
-    Args:
-        tensor: (C, H, W) or (B, C, H, W) normalized tensor
-        mean: Normalization mean
-        std: Normalization std
-
-    Returns:
-        (H, W, 3) uint8 numpy array
-    """
-    if mean is None:
-        mean = [0.485, 0.456, 0.406]
-    if std is None:
-        std = [0.229, 0.224, 0.225]
-
-    if tensor.dim() == 4:
-        tensor = tensor[0]
-
-    img = tensor.clone()
-    for c in range(3):
-        img[c] = img[c] * std[c] + mean[c]
-
-    img = torch.clamp(img, 0, 1)
-    img = (img.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-    return img
-
-
-def mask_to_color(mask: torch.Tensor) -> np.ndarray:
-    """Convert class-index mask to color visualization.
-
-    Color scheme (RGB):
-        0 (background): black  (0, 0, 0)
-        1 (sky):         orange (255, 140, 0)
-        2 (water):       cyan   (0, 200, 255)
-        3 (person):      red    (255, 60, 60)
-
-    Args:
-        mask: (H, W) class indices
-
-    Returns:
-        (H, W, 3) uint8 RGB image
-    """
-    if mask.dim() == 3:
-        mask = mask[0]
-
-    mask_np = mask.cpu().numpy().astype(np.uint8)
-
-    h, w = mask_np.shape
-    vis = np.zeros((h, w, 3), dtype=np.uint8)
-    for cls_id, color in CLASS_COLORS_RGB.items():
-        if cls_id == 0:
-            continue
-        vis[mask_np == cls_id] = color
-    return vis
+# Re-exported for backward compatibility so existing imports from utils keep working.
+from skywater_seg.visualization import (  # noqa: E402, F401
+    CLASS_COLORS_RGB,
+    CLASS_NAMES,
+    class_colors_bgr,
+    mask_to_color,
+    tensor_to_image,
+)
 
 
 # ============================================================

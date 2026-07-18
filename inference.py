@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Convenience inference script for sky/water segmentation.
+Sky/Water/Person segmentation inference CLI.
 
 Usage:
-  # Single image
-  python inference.py --checkpoint checkpoints/skywater-seg/best_model.pth --input test.jpg
+  # From HuggingFace (auto-downloads)
+  uv run python inference.py --hf -i test.jpg
 
-  # Directory of images
-  python inference.py --checkpoint model.pth --input data/images/ --output results/
+  # From local checkpoint
+  uv run python inference.py --checkpoint model.pth -i test.jpg
 
-  # With ONNX export
-  python inference.py --checkpoint model.pth --export-onnx skywater_seg.onnx
+  # ONNX Runtime (no PyTorch needed)
+  uv run python inference.py --onnx model.onnx -i test.jpg
 
-  # Using ONNX model directly (no PyTorch needed)
-  python inference.py --onnx skywater_seg.onnx --input test.jpg
+  # Export ONNX
+  uv run python inference.py --checkpoint model.pth --export-onnx model.onnx
 """
 
 import argparse
@@ -21,35 +21,27 @@ from pathlib import Path
 
 from loguru import logger
 
-from skywater_seg.inference import (
-    ONNXRuntimeInference,
-    SegmentationInference,
-    draw_overlay,
-)
+from skywater_seg.visualization import draw_overlay
 
 
 def main():
     parser = argparse.ArgumentParser(description="Sky/Water Segmentation Inference")
+    parser.add_argument("--hf", action="store_true",
+                        help="Download model from HuggingFace (Realcat/skywater_seg)")
     parser.add_argument("--checkpoint", "-c", type=str,
                         help="Path to PyTorch checkpoint (.pth)")
     parser.add_argument("--onnx", type=str,
-                        help="Path to ONNX model (use ONNX Runtime, no PyTorch)")
+                        help="Path to ONNX model (no PyTorch needed)")
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="Input image or directory")
     parser.add_argument("--output", "-o", type=str, default="./results",
                         help="Output directory")
-    parser.add_argument("--config", type=str, default=None,
-                        help="Config YAML (optional — auto-detected from checkpoint if omitted)")
     parser.add_argument("--device", type=str, default="cuda",
-                        help="Device: cuda or cpu")
+                        help="Device: cuda, cpu, coreml")
     parser.add_argument("--export-onnx", type=str, default=None,
                         help="Export to ONNX and exit")
-    parser.add_argument("--export-coreml", type=str, default=None,
-                        help="Export ONNX→CoreML .mlpackage and exit (macOS only)")
-    parser.add_argument("--export-torchscript", type=str, default=None,
-                        help="Export to TorchScript .pt and exit")
     parser.add_argument("--no-overlay", action="store_true",
-                        help="Skip saving visualization overlay")
+                        help="Skip visualization overlay")
     parser.add_argument("--crf", action="store_true",
                         help="Apply CRF post-processing (requires pydensecrf)")
 
@@ -60,78 +52,49 @@ def main():
     output_path.mkdir(parents=True, exist_ok=True)
 
     # ---- Load model ----
-    if args.onnx:
-        logger.info(f"Loading ONNX model: {args.onnx}")
-        infer = ONNXRuntimeInference(args.onnx)
-    elif args.checkpoint:
-        from skywater_seg.config import Config
-        if args.config and Path(args.config).exists():
-            config = Config.from_yaml(args.config)
-        else:
-            config = None  # auto-detect from checkpoint metadata
-        logger.info(f"Loading checkpoint: {args.checkpoint}")
-        infer = SegmentationInference(args.checkpoint, config, device=args.device)
+    if args.hf:
+        logger.info("Loading from HuggingFace: Realcat/skywater_seg")
+        from skywater_seg.inference import load_model, segment
+        model = load_model(args.device)
+        class _HF:
+            def predict(self, path, **_):
+                m = segment(path, model)
+                return {"mask": m, "sky_mask": m == 1, "water_mask": m == 2}
+        infer = _HF()
 
-        # Export ONNX if requested
+    elif args.onnx:
+        logger.info(f"Loading ONNX model: {args.onnx}")
+        from skywater_seg.inference import ONNXRuntimeInference
+        infer = ONNXRuntimeInference(args.onnx, provider=args.device)
+
+    elif args.checkpoint:
+        logger.info(f"Loading checkpoint: {args.checkpoint}")
+        from skywater_seg.inference import SegmentationInference
+        infer = SegmentationInference(args.checkpoint, device=args.device)
+
         if args.export_onnx:
             infer.export_onnx(args.export_onnx)
             logger.info("ONNX export complete. Exiting.")
             return
-
-        # Export CoreML if requested (macOS only)
-        if args.export_coreml:
-            from skywater_seg.coreml_export import export_coreml
-            onnx_path = args.export_onnx or str(Path(args.checkpoint).with_suffix(".onnx"))
-            if not Path(onnx_path).exists():
-                infer.export_onnx(onnx_path)
-            export_coreml(onnx_path, args.export_coreml)
-            logger.info("CoreML export complete. Exiting.")
-            return
-
-        # Export TorchScript if requested
-        if args.export_torchscript:
-            infer.export_torchscript(args.export_torchscript)
-            logger.info("TorchScript export complete. Exiting.")
-            return
     else:
-        logger.error("Provide --checkpoint or --onnx")
+        logger.error("Provide --hf, --checkpoint, or --onnx")
         return
 
     # ---- Process images ----
-    extensions = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
-    if input_path.is_file():
-        image_paths = [str(input_path)]
-    else:
-        image_paths = sorted([
-            str(f) for f in input_path.glob("*")
-            if f.suffix.lower() in extensions
-        ])
+    exts = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp")
+    paths = sorted([str(f) for f in input_path.glob("*") if f.suffix.lower() in exts]) if input_path.is_dir() else [str(input_path)]
 
-    logger.info(f"Processing {len(image_paths)} images...")
-
-    for img_path in image_paths:
+    logger.info(f"Processing {len(paths)} images...")
+    import cv2
+    for img_path in paths:
         stem = Path(img_path).stem
-
-        result = infer.predict(
-            img_path,
-            apply_crf=args.crf,
-            return_probabilities=False,
-        )
-
-        # Save mask
-        mask_path = output_path / f"{stem}_mask.png"
-        import cv2
-        cv2.imwrite(str(mask_path), result["mask"])
-
-        # Save overlay
+        result = infer.predict(img_path, apply_crf=args.crf)
+        cv2.imwrite(str(output_path / f"{stem}_mask.png"), result["mask"])
         if not args.no_overlay:
-            vis = draw_overlay(img_path, result["mask"])
-            vis_path = output_path / f"{stem}_vis.jpg"
-            cv2.imwrite(str(vis_path), vis)
-
+            cv2.imwrite(str(output_path / f"{stem}_vis.jpg"), draw_overlay(img_path, result["mask"]))
         logger.info(f"[OK] {stem}: sky={result['sky_mask'].sum():,}px, water={result['water_mask'].sum():,}px")
 
-    logger.info(f"Done! {len(image_paths)} images → {output_path}")
+    logger.info(f"Done! {len(paths)} images -> {output_path}")
 
 
 if __name__ == "__main__":

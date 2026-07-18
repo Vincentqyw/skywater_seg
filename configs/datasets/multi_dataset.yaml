@@ -5,16 +5,14 @@
 # (street scenes, 3K images) for balanced sky/water/person.
 #
 # ADE20K:  rich sky + person, weaker water coverage
-# Cityscapes: rich water + person street scenes (→ compensates)
-#
-# Class mapping unified: 0=bg, 1=sky, 2=water, 3=person
+# Cityscapes: rich water + person street scenes (-> compensates)
 
 experiment_name: skywater-multi
 output_dir: ./checkpoints
 seed: 42
 device: cuda
 
-# ── Multi-Dataset Sources ──
+# -- Multi-Dataset Sources --
 datasets:
   - name: ade20k
     image_dir: E:/datasets/ADEChallengeData2016/images
@@ -37,14 +35,12 @@ datasets:
       23: 1      # sky
       21: 2      # water
       11: 3      # person
-      24: 3      # rider → person
+      24: 3      # rider -> person
     cityscapes: true
 
-# Sampling weights: cityscapes has 3K images vs ADE20K 11K,
-# give cityscapes higher weight to balance water class exposure
-mix_weights: [1.0, 2.0]
+mix_weights: [1.0, 2.0]                             # Cityscapes weighted higher for water balance
 
-# ── Shared data settings ──
+# -- Shared data settings --
 data:
   image_size: [512, 512]
   num_classes: 4
@@ -63,7 +59,7 @@ data:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
 
-# ── Model: ConvNeXt-Tiny + DINOv3 ──
+# -- Model: ConvNeXt-Tiny + DINOv3 --
 model:
   name: deeplabv3plus
   encoder_name: convnext-tiny
@@ -74,7 +70,7 @@ model:
   decoder_channels: 256
   decoder_atrous_rates: [12, 24, 36]
 
-# ── Training (RTX 3060 6GB) ──
+# -- Training (RTX 3060 6GB) --
 train:
   batch_size: 12
   epochs: 80

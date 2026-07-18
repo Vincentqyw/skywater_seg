@@ -3,7 +3,7 @@ CLI entry points for uv-managed package scripts.
 
 Usage:
   skywater-annotate -i data/images -o data/masks
-  skywater-train --config configs/default.yaml
+  skywater-train --config configs/models/mobilenetv3_flatdir.yaml
   skywater-infer --checkpoint model.pth --input test.jpg
 """
 
