@@ -45,14 +45,19 @@ jobs:
         run: |
           cd demo/cxx
           cmake --build build --config Release
+          ls build/Release/skywater_infer.exe
 
       - name: Download model
         run: |
-          pip install huggingface_hub
-          python -c "from huggingface_hub import hf_hub_download; hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.')"
+          pip install --quiet huggingface_hub Pillow numpy
+          python -c "from huggingface_hub import hf_hub_download; \
+            path = hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.'); \
+            print(f'Model: {path}')"
+          dir skywater_segformer_b2_fp16.onnx
 
       - name: Run inference
         run: |
+          if not exist skywater_segformer_b2_fp16.onnx ( echo FATAL: model not found && exit /b 1 )
           cd demo/cxx/build/Release
           ./skywater_infer.exe ../../../skywater_segformer_b2_fp16.onnx ../../../assets/photos/DSCF8980.jpg ci_mask.png cpu --iters 10
 

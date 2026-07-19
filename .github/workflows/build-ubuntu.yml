@@ -21,6 +21,8 @@ jobs:
     env:
       FETCHCONTENT_CACHE_VERSION: 1
       FETCHCONTENT_CACHE_DIR: ${{ github.workspace }}/build/_deps
+      MODEL_PATH: ${{ github.workspace }}/skywater_segformer_b2_fp16.onnx
+      IMAGE_PATH: ${{ github.workspace }}/assets/photos/DSCF8980.jpg
 
     steps:
       - uses: actions/checkout@v7
@@ -34,8 +36,7 @@ jobs:
           path: ${{ env.FETCHCONTENT_CACHE_DIR }}
 
       - name: Install system deps
-        run: |
-          sudo apt-get update && sudo apt-get install -y cmake build-essential
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
 
       - name: Configure
         run: |
@@ -49,16 +50,21 @@ jobs:
         run: |
           cd demo/cxx
           cmake --build build --config Release
+          ls -la build/skywater_infer
 
       - name: Download model
         run: |
-          pip install huggingface_hub
-          python -c "from huggingface_hub import hf_hub_download; hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.')"
+          pip install --quiet huggingface_hub Pillow numpy
+          python -c "from huggingface_hub import hf_hub_download; \
+            path = hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.'); \
+            print(f'Model: {path}')"
+          ls -la "$MODEL_PATH"
 
       - name: Run inference
         run: |
+          test -f "$MODEL_PATH" || { echo "FATAL: model not found"; exit 1; }
           cd demo/cxx/build
-          ./skywater_infer ../../skywater_segformer_b2_fp16.onnx ../../assets/photos/DSCF8980.jpg ci_mask.png cpu --iters 10
+          ./skywater_infer "$MODEL_PATH" "$IMAGE_PATH" ci_mask.png cpu --iters 10
 
       - name: Verify output
         run: |
