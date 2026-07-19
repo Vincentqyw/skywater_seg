@@ -54,7 +54,7 @@ jobs:
 
       - name: Download model
         run: |
-          python3 -m pip install --quiet huggingface_hub Pillow numpy
+          python3 -m pip install --quiet --break-system-packages huggingface_hub Pillow numpy
           python3 -c "from huggingface_hub import hf_hub_download; \
             path = hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.'); \
             print(f'Model: {path}')"
