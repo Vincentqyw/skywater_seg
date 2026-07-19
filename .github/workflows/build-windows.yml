@@ -46,21 +46,18 @@ jobs:
           cmake --build build --config Release
           dir build\skywater_infer.exe
 
-      - name: Download model
+      - name: Download model and run inference
         shell: bash
         run: |
           pip install --quiet huggingface_hub Pillow numpy
+          MODEL="${{ github.workspace }}/skywater_segformer_b2_fp16.onnx"
+          IMAGE="${{ github.workspace }}/assets/photos/DSCF8980.jpg"
           python -c "from huggingface_hub import hf_hub_download; \
-            path = hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.'); \
-            print(f'Model: {path}')"
-          ls -la skywater_segformer_b2_fp16.onnx
-
-      - name: Run inference
-        shell: bash
-        run: |
-          test -f skywater_segformer_b2_fp16.onnx || { echo "FATAL: model not found"; exit 1; }
+            hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='${{ github.workspace }}')"
+          test -f "$MODEL" || { echo "FATAL: model not found at $MODEL"; exit 1; }
+          ls -la "$MODEL"
           cd demo/cxx/build
-          ./skywater_infer.exe ../../skywater_segformer_b2_fp16.onnx ../../assets/photos/DSCF8980.jpg ci_mask.png cpu --iters 10
+          ./skywater_infer.exe "$MODEL" "$IMAGE" ci_mask.png cpu --iters 10
 
       - name: Verify output
         run: |
