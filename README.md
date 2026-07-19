@@ -15,7 +15,7 @@
 
 **SegFormer MiT-B2** (24.7M params) · 384×384 · ADE20K filtered val (1,111 images)
 
-### Accuracy
+### 📊 Per-Class Accuracy
 
 | Class | IoU | Dice | Precision | Recall |
 |-------|-----|------|-----------|--------|
@@ -28,7 +28,7 @@
 | **Pixel Accuracy** | **97.2%** | — | — | — |
 
 
-### Accuracy vs Speed
+### ⚡ Backend Accuracy & Speed
 
 > All backends produce **pixel-identical** results (only 0.003% difference from FP16 weight quantization).
 
