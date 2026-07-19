@@ -8,14 +8,14 @@
 **Fine-tuned SegFormer B2** for sky, water, and person segmentation. Pre-filter images for robust Structure-from-Motion and image matching.
 
 <p align="center">
-  <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
+  <img src="results/onnx_benchmark/sample_grid.jpg" width="100%" alt="SegFormer B2 predictions">
 </p>
 
 ## 📊 Performance
 
 **SegFormer MiT-B2** (24.7M params) · 384×384 · ADE20K filtered val (1,111 images)
 
-### 📊 Per-Class Accuracy
+### 🎯 Per-Class Accuracy
 
 | Class | IoU | Dice | Precision | Recall |
 |-------|-----|------|-----------|--------|
