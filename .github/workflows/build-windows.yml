@@ -50,12 +50,15 @@ jobs:
         shell: bash
         run: |
           pip install --quiet huggingface_hub Pillow numpy
-          MODEL="${{ github.workspace }}/skywater_segformer_b2_fp16.onnx"
-          IMAGE="${{ github.workspace }}/assets/photos/DSCF8980.jpg"
-          python -c "from huggingface_hub import hf_hub_download; \
-            hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='${{ github.workspace }}')"
+          python -c "
+          import os
+          from huggingface_hub import hf_hub_download
+          ws = os.environ['GITHUB_WORKSPACE']
+          hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir=ws)
+          "
+          MODEL="$GITHUB_WORKSPACE/skywater_segformer_b2_fp16.onnx"
+          IMAGE="$GITHUB_WORKSPACE/assets/photos/DSCF8980.jpg"
           test -f "$MODEL" || { echo "FATAL: model not found at $MODEL"; exit 1; }
-          ls -la "$MODEL"
           cd demo/cxx/build
           ./skywater_infer.exe "$MODEL" "$IMAGE" ci_mask.png cpu --iters 10
 
