@@ -78,9 +78,10 @@ target_include_directories(skywater_infer PRIVATE
 target_link_directories(skywater_infer PRIVATE "${ONNXRUNTIME_ROOTDIR}/lib")
 target_link_libraries(skywater_infer PRIVATE onnxruntime)
 
-# macOS: enable CoreML / Apple Neural Engine acceleration
+# macOS: enable CoreML / Apple Neural Engine acceleration.
+# The CoreML provider is built into libonnxruntime.dylib on macOS (no
+# separate library needed).
 if(APPLE)
-  target_link_libraries(skywater_infer PRIVATE onnxruntime_providers_coreml)
   add_compile_definitions(ORT_COREML_ENABLED)
 endif()
 
