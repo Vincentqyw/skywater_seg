@@ -1,0 +1,70 @@
+name: Demo (Windows)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+on:
+  push:
+    branches:
+      - main
+      - release/*
+  pull_request:
+    types: [assigned, opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    name: windows-2025 CPU Release
+    runs-on: windows-2025
+
+    env:
+      FETCHCONTENT_CACHE_VERSION: 1
+      FETCHCONTENT_CACHE_DIR: ${{ github.workspace }}/build/_deps
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v6
+        id: cache-fetchcontent
+        with:
+          key: fetchcontent-v${{ env.FETCHCONTENT_CACHE_VERSION }}-windows-cpu-${{ hashFiles('demo/cxx/cmake/FetchOnnxRuntime.cmake') }}
+          restore-keys: fetchcontent-v${{ env.FETCHCONTENT_CACHE_VERSION }}-windows-cpu-
+          path: ${{ env.FETCHCONTENT_CACHE_DIR }}
+
+      - name: Configure
+        run: |
+          cd demo/cxx
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="" `
+            -DONNXRUNTIME_CUDA=OFF `
+            -DFETCHCONTENT_FULLY_DISCONNECTED=${{ steps.cache-fetchcontent.outputs.cache-hit == 'true' && 'ON' || 'OFF' }}
+
+      - name: Build
+        run: |
+          cd demo/cxx
+          cmake --build build --config Release
+
+      - name: Download model
+        run: |
+          pip install huggingface_hub
+          python -c "from huggingface_hub import hf_hub_download; hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.')"
+
+      - name: Run inference
+        run: |
+          cd demo/cxx/build/Release
+          ./skywater_infer.exe ../../../skywater_segformer_b2_fp16.onnx ../../../assets/photos/DSCF8980.jpg ci_mask.png cpu --iters 10
+
+      - name: Verify output
+        run: |
+          python -c "
+          from PIL import Image
+          import numpy as np
+          img = np.array(Image.open('demo/cxx/build/Release/ci_mask.png'))
+          sky_pct = (img == [255, 140, 0]).all(axis=2).mean() * 100
+          water_pct = (img == [0, 200, 255]).all(axis=2).mean() * 100
+          assert sky_pct > 5, f'Sky too low: {sky_pct:.1f}%'
+          assert water_pct > 5, f'Water too low: {water_pct:.1f}%'
+          print(f'OK: sky={sky_pct:.1f}% water={water_pct:.1f}%')
+          "
