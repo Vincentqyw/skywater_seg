@@ -86,7 +86,7 @@ def run_inference(image: np.ndarray | None) -> np.ndarray | None:
         f"{CLASS_NAMES[i]}={(mask == i).sum() / total_px * 100:.1f}%"
         for i in range(len(CLASS_NAMES))
     )
-    logger.info(f"[inference] [{backend}] {w}×{h}  |  {elapsed:.0f} ms  |  {pcts}")
+    logger.info(f"[inference] [{backend}] {w}x{h}  |  {elapsed:.0f} ms  |  {pcts}")
     return mask
 
 
@@ -126,7 +126,7 @@ def process_per_class(
     image: np.ndarray | None,
     mask: np.ndarray | None,
 ) -> tuple:
-    """Return (bg, sky, water, person) RGBA masks as a 2×2 grid."""
+    """Return (bg, sky, water, person) RGBA masks as a 2x2 grid."""
     if image is None or mask is None:
         return None, None, None, None
     return (
@@ -189,8 +189,9 @@ Upload an image to segment **sky**, **water**, and **person** regions—designed
 [![GitHub](https://img.shields.io/badge/GitHub-Vincentqyw%2Fskywater_seg-24292e?logo=github&logoColor=white&style=flat-square)](https://github.com/Vincentqyw/skywater_seg)
 [![HF Model](https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Model-Realcat%2Fskywater__seg-ff9a00?style=flat-square)](https://huggingface.co/Realcat/skywater_seg)
 [![HF Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20HF%20Dataset-Realcat%2Fskywater-3b82f6?style=flat-square)](https://huggingface.co/datasets/Realcat/skywater)
+[![Hugging Face Space](https://img.shields.io/badge/🤗-Live_Demo-blue.svg)](https://huggingface.co/spaces/Realcat/skywater_seg)
 
-**SegFormer MiT-B2** (24.7M) &nbsp;|&nbsp; 384×384 &nbsp;|&nbsp; mIoU 88.1% &nbsp;|&nbsp; ONNX · CoreML · PyTorch
+**SegFormer MiT-B2** (24.7M) &nbsp;|&nbsp; 384x384 &nbsp;|&nbsp; mIoU 88.1% &nbsp;|&nbsp; ONNX · CoreML · PyTorch
 
 <p style="margin-bottom: 160px;">🟠 Sky &nbsp; 🔵 Water &nbsp; 🔴 Person &nbsp; ⚫ Background</p>
 

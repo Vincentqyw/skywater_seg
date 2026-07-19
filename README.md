@@ -5,8 +5,7 @@
 [![Hugging Face](https://img.shields.io/badge/🤗-Model_on_HF-orange.svg)](https://huggingface.co/Realcat/skywater_seg)
 [![Hugging Face Space](https://img.shields.io/badge/🤗-Live_Demo-blue.svg)](https://huggingface.co/spaces/Realcat/skywater_seg)
 
-**Fine-tuned SegFormer B2** for sky, water, and person segmentation.  
-Pre-filter images for robust Structure-from-Motion and image matching.
+**Fine-tuned SegFormer B2** for sky, water, and person segmentation. Pre-filter images for robust Structure-from-Motion and image matching.
 
 <p align="center">
   <img src="results/onnx_benchmark/sample_grid.png" width="100%" alt="SegFormer B2 predictions">
@@ -40,6 +39,15 @@ Pre-filter images for robust Structure-from-Motion and image matching.
 | ONNX FP16 GPU | 88.1% | 94.6% | 97.2% | **13.6 ms** |
 | ONNX FP32 CPU | 88.1% | 94.6% | 97.2% | 169.5 ms |
 
+
+### Pre-trained Models
+
+| Model | Format | Size | Link |
+|-------|--------|------|------|
+| SegFormer B2 | PyTorch (safetensors) | 95 MB | [HF Hub](https://huggingface.co/Realcat/skywater_seg) |
+| SegFormer B2 | PyTorch (full ckpt) | 284 MB | [.pth](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2.pth) |
+| SegFormer B2 | ONNX FP32 | 95 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp32.onnx) |
+| SegFormer B2 | ONNX FP16 | 48 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp16.onnx) |
 
 
 ## 🚀 Quick Start
@@ -81,15 +89,15 @@ uv run python inference.py --onnx skywater_segformer_b2_fp16.onnx -i assets/ade/
 
 </details>
 
-### 🎨 Interactive Demo (Gradio)
+### 🤗 Interactive Demo
 
 ```bash
 uv run python app.py                           # HF Hub model (default)
 ```
 
-Launch a Gradio web UI to explore segmentation interactively. **Try it online at [🤗 HuggingFace Space](https://huggingface.co/spaces/Realcat/skywater_seg).**
+Launch a Gradio web UI to explore segmentation interactively. **Try it online at [HuggingFace Space](https://huggingface.co/spaces/Realcat/skywater_seg).**
 
-### Reproduce the Best Model
+### 🏆 Reproduce the Best Model
 
 <details>
 
@@ -106,14 +114,6 @@ uv run python train.py --config configs/models/segformer_b2.yaml
 
 </details>
 
-### Pre-trained Models
-
-| Model | Format | Size | Link |
-|-------|--------|------|------|
-| SegFormer B2 | PyTorch (safetensors) | 95 MB | [HF Hub](https://huggingface.co/Realcat/skywater_seg) |
-| SegFormer B2 | PyTorch (full ckpt) | 284 MB | [.pth](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2.pth) |
-| SegFormer B2 | ONNX FP32 | 95 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp32.onnx) |
-| SegFormer B2 | ONNX FP16 | 48 MB | [.onnx](https://huggingface.co/Realcat/skywater_seg/resolve/main/skywater_segformer_b2_fp16.onnx) |
 
 ## 📸 Sample Results
 
