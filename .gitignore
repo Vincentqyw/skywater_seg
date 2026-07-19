@@ -55,6 +55,10 @@ Thumbs.db
 outputs/
 output/
 
+# Build artifacts
+build/
+build_*/
+
 # Third-party code
 thirdparty/
 scripts/eval_segformer_b2.py

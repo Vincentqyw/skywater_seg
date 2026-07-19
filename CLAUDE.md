@@ -78,7 +78,7 @@ uv run ruff check skywater_seg/                  # lint
 ### Demo
 
 ```bash
-uv run jupyter notebook demo.ipynb               # Full walkthrough
+uv run jupyter notebook demo/demo.ipynb           # Full walkthrough
 ```
 
 ## Architecture
