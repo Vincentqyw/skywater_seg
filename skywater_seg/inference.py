@@ -712,6 +712,29 @@ def convert_onnx_fp16(
     logger.info(f"Converting to FP16 → {output_path}")
     m = onnx.load(onnx_fp32_path)
     m_fp16 = oc_f16.convert_float_to_float16(m, keep_io_types=True)
+
+    # ``keep_io_types=True`` sometimes leaves output as FLOAT16 despite the
+    # name — manually add a Cast node to guarantee FP32 output.
+    from onnx import TensorProto, helper
+
+    for i, out in enumerate(m_fp16.graph.output):
+        if out.type.tensor_type.elem_type == TensorProto.FLOAT16:
+            old_shape = [
+                dim.dim_value if dim.dim_value else dim.dim_param
+                for dim in out.type.tensor_type.shape.dim
+            ]
+            cast_node = helper.make_node(
+                "Cast",
+                inputs=[out.name],
+                outputs=[out.name + "_fp32"],
+                to=int(TensorProto.FLOAT),
+            )
+            m_fp16.graph.node.append(cast_node)
+            new_out = helper.make_tensor_value_info(
+                out.name + "_fp32", TensorProto.FLOAT, old_shape
+            )
+            m_fp16.graph.output[i].CopyFrom(new_out)
+
     onnx.save(m_fp16, output_path)
     sz = os.path.getsize(output_path) / 1e6
     logger.info(f"  FP16 model: {output_path} ({sz:.1f} MB)")

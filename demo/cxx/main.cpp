@@ -57,56 +57,6 @@ constexpr uint8_t CLASS_COLORS[NUM_CLASSES][3] = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// FP16 ↔ FP32 conversion
-// ═══════════════════════════════════════════════════════════════════════
-
-// IEEE 754 half-precision float → single-precision float
-static float half_to_float(uint16_t h) {
-  const uint32_t sign = (h & 0x8000u) << 16;
-  const uint32_t exp_raw = (h >> 10) & 0x1Fu;
-  const uint32_t mant = h & 0x3FFu;
-
-  if (exp_raw == 0) {
-    // Zero / subnormal
-    if (mant == 0) {
-      uint32_t r = sign;
-      float f;
-      std::memcpy(&f, &r, sizeof(f));
-      return f;
-    }
-    // Normalise subnormal
-    uint32_t m = mant;
-    int e = 1;
-    while ((m & 0x400u) == 0) { m <<= 1; --e; }
-    uint32_t bits = sign | ((127 - 15 + e) << 23) | ((m & 0x3FFu) << 13);
-    float f;
-    std::memcpy(&f, &bits, sizeof(f));
-    return f;
-  }
-  if (exp_raw == 31) {
-    // Inf / NaN
-    uint32_t bits = sign | 0x7F800000u | (mant << 13);
-    float f;
-    std::memcpy(&f, &bits, sizeof(f));
-    return f;
-  }
-  // Normal number
-  uint32_t bits = sign | ((exp_raw - 15 + 127) << 23) | (mant << 13);
-  float f;
-  std::memcpy(&f, &bits, sizeof(f));
-  return f;
-}
-
-// 64K-entry lookup table — turns per-element branchy conversion into
-// a single array lookup (256 KB, negligible vs the image buffers).
-static const auto kHalfToFloatLUT = []() {
-  std::array<float, 65536> lut{};
-  for (uint32_t i = 0; i < 65536; ++i)
-    lut[i] = half_to_float(static_cast<uint16_t>(i));
-  return lut;
-}();
-
-// ═══════════════════════════════════════════════════════════════════════
 // Bilinear resize (CHW layout, contiguous float)
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -187,7 +137,6 @@ struct SkyWaterInference {
   Ort::AllocatorWithDefaultOptions allocator;
   std::string input_name;
   std::string output_name;
-  bool output_is_fp16 = false;
   bool use_coreml_ = false;
 
   SkyWaterInference(const std::string& model_path,
@@ -265,11 +214,6 @@ struct SkyWaterInference {
     input_name = in_name.get();
     output_name = out_name.get();
 
-    // Check output type
-    Ort::TypeInfo out_type = session->GetOutputTypeInfo(0);
-    auto tensor_info = out_type.GetTensorTypeAndShapeInfo();
-    output_is_fp16 = (tensor_info.GetElementType() == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
-
     std::string actual_provider = provider;
     if (use_coreml_)
       actual_provider = "coreml (Apple Neural Engine)";
@@ -278,8 +222,7 @@ struct SkyWaterInference {
 
     std::cout << "Model: " << model_path << "\n"
               << "  Input:  " << input_name << " [1, 3, " << INPUT_H << ", " << INPUT_W << "]\n"
-              << "  Output: " << output_name << " [1, 4, H, W] "
-              << (output_is_fp16 ? "float16" : "float32") << "\n"
+              << "  Output: " << output_name << " [1, 4, H, W] float32\n"
               << "  Provider: " << actual_provider << "\n"
               << std::endl;
   }
@@ -316,15 +259,8 @@ struct SkyWaterInference {
     size_t out_count = out_shape[0] * out_shape[1] * out_h * out_w;
 
     out.resize(out_count);
-
-    if (output_is_fp16) {
-      const auto* fp16_data = out_val.GetTensorData<Ort::Float16_t>();
-      for (size_t i = 0; i < out_count; ++i)
-        out[i] = kHalfToFloatLUT[fp16_data[i].val];
-    } else {
-      const auto* fp32_data = out_val.GetTensorData<float>();
-      std::copy_n(fp32_data, out_count, out.begin());
-    }
+    const auto* fp32_data = out_val.GetTensorData<float>();
+    std::copy_n(fp32_data, out_count, out.begin());
   }
 };
 
