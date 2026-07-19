@@ -39,6 +39,7 @@ jobs:
           arch: amd64
 
       - name: Configure
+        shell: cmd
         run: |
           cd demo/cxx
           cmake -B build -GNinja ^
@@ -48,6 +49,7 @@ jobs:
             -DFETCHCONTENT_FULLY_DISCONNECTED=${{ steps.cache-fetchcontent.outputs.cache-hit == 'true' && 'ON' || 'OFF' }}
 
       - name: Build
+        shell: cmd
         run: |
           cd demo/cxx
           cmake --build build --config Release
