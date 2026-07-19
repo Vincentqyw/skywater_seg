@@ -18,6 +18,14 @@
 
 #include <onnxruntime_cxx_api.h>
 
+#ifdef ORT_COREML_ENABLED
+// CoreML provider — C API (no C++ wrapper in ORT yet)
+extern "C" {
+OrtStatus* OrtSessionOptionsAppendExecutionProvider_CoreML(
+    OrtSessionOptions* options, uint32_t coreml_flags);
+}
+#endif
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -180,6 +188,7 @@ struct SkyWaterInference {
   std::string input_name;
   std::string output_name;
   bool output_is_fp16 = false;
+  bool use_coreml_ = false;
 
   SkyWaterInference(const std::string& model_path,
                     const std::string& provider = "cpu") {
@@ -203,14 +212,52 @@ struct SkyWaterInference {
     // Note: DML requires a separate DirectML-enabled ORT package.
     // "cpu" → default, no EP to append.
 
-    opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-#ifdef _WIN32
-    std::wstring wpath(model_path.begin(), model_path.end());
-    session = std::make_unique<Ort::Session>(env, wpath.c_str(), opts);
-#else
-    session = std::make_unique<Ort::Session>(env, model_path.c_str(), opts);
+#ifdef ORT_COREML_ENABLED
+    if (provider == "coreml") {
+      // CoreML for Apple Neural Engine (macOS), following COLMAP's pattern.
+      // Use ML Program format (COREML_FLAG_CREATE_MLPROGRAM) for wider op
+      // coverage.  No C++ wrapper exists yet, so we go through the C API.
+      OrtSessionOptions* raw = nullptr;
+      Ort::ThrowOnError(Ort::GetApi().CreateSessionOptions(&raw));
+      Ort::ThrowOnError(Ort::GetApi().SetSessionGraphOptimizationLevel(
+          raw, ORT_ENABLE_ALL));
+      constexpr uint32_t kCoreMLFlags = 0x001;  // COREML_FLAG_CREATE_MLPROGRAM
+      Ort::ThrowOnError(
+          OrtSessionOptionsAppendExecutionProvider_CoreML(raw, kCoreMLFlags));
+      opts = Ort::SessionOptions(raw);  // takes ownership
+      use_coreml_ = true;               // mark for fallback handling
+    }
 #endif
+
+    if (!use_coreml_) {
+      opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    }
+
+    auto create_session = [&]() {
+#ifdef _WIN32
+      std::wstring wpath(model_path.begin(), model_path.end());
+      return std::make_unique<Ort::Session>(env, wpath.c_str(), opts);
+#else
+      return std::make_unique<Ort::Session>(env, model_path.c_str(), opts);
+#endif
+    };
+
+    if (use_coreml_) {
+      try {
+        session = create_session();
+      } catch (const Ort::Exception& e) {
+        // Some models cannot be compiled by CoreML (e.g. dynamic shapes).
+        // Fall back to pure CPU execution, following COLMAP's pattern.
+        std::cerr << "WARNING: CoreML session failed (" << e.what()
+                  << "). Falling back to CPU." << std::endl;
+        use_coreml_ = false;
+        opts = Ort::SessionOptions{};
+        opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        session = create_session();
+      }
+    } else {
+      session = create_session();
+    }
 
     // Query I/O names
     Ort::AllocatedStringPtr in_name = session->GetInputNameAllocated(0, allocator);
@@ -223,11 +270,17 @@ struct SkyWaterInference {
     auto tensor_info = out_type.GetTensorTypeAndShapeInfo();
     output_is_fp16 = (tensor_info.GetElementType() == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
 
+    std::string actual_provider = provider;
+    if (use_coreml_)
+      actual_provider = "coreml (Apple Neural Engine)";
+    else if (provider == "coreml")
+      actual_provider = "cpu (coreml fallback)";
+
     std::cout << "Model: " << model_path << "\n"
               << "  Input:  " << input_name << " [1, 3, " << INPUT_H << ", " << INPUT_W << "]\n"
               << "  Output: " << output_name << " [1, 4, H, W] "
               << (output_is_fp16 ? "float16" : "float32") << "\n"
-              << "  Provider: " << provider << "\n"
+              << "  Provider: " << actual_provider << "\n"
               << std::endl;
   }
 
@@ -414,7 +467,7 @@ static void print_usage() {
       << "  model.onnx    : Path to FP16 (or FP32) ONNX model\n"
       << "  input_image   : JPEG / PNG image file\n"
       << "  output.png    : Where to save colourised segmentation mask\n"
-      << "  cpu|cuda      : Execution provider (default: cpu)\n"
+      << "  cpu|cuda|coreml: Execution provider (default: cpu)\n"
       << "  --iters N     : Number of inference runs for timing (default: 50)\n"
       << "  --overlay <p> : Save alpha-blended overlay to <p>\n"
       << std::endl;
@@ -436,7 +489,7 @@ int main(int argc, char* argv[]) {
   // Parse optional args
   for (int i = 4; i < argc; ++i) {
     std::string arg = argv[i];
-    if (arg == "cpu" || arg == "cuda") {
+    if (arg == "cpu" || arg == "cuda" || arg == "coreml") {
       provider = arg;
     } else if (arg == "--iters" && i + 1 < argc) {
       num_iters = std::stoi(argv[++i]);

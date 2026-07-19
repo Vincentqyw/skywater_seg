@@ -33,34 +33,39 @@ jobs:
           restore-keys: fetchcontent-v${{ env.FETCHCONTENT_CACHE_VERSION }}-windows-cpu-
           path: ${{ env.FETCHCONTENT_CACHE_DIR }}
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
       - name: Configure
-        shell: pwsh
         run: |
           cd demo/cxx
-          cmake -B build -GNinja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="" `
-            -DONNXRUNTIME_CUDA=OFF `
+          cmake -B build -GNinja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_TOOLCHAIN_FILE="" ^
+            -DONNXRUNTIME_CUDA=OFF ^
             -DFETCHCONTENT_FULLY_DISCONNECTED=${{ steps.cache-fetchcontent.outputs.cache-hit == 'true' && 'ON' || 'OFF' }}
 
       - name: Build
-        shell: pwsh
         run: |
           cd demo/cxx
           cmake --build build --config Release
-          ls build/skywater_infer.exe
+          dir build\skywater_infer.exe
 
       - name: Download model
+        shell: bash
         run: |
           pip install --quiet huggingface_hub Pillow numpy
           python -c "from huggingface_hub import hf_hub_download; \
             path = hf_hub_download('Realcat/skywater_seg', 'skywater_segformer_b2_fp16.onnx', local_dir='.'); \
             print(f'Model: {path}')"
-          dir skywater_segformer_b2_fp16.onnx
+          ls -la skywater_segformer_b2_fp16.onnx
 
       - name: Run inference
+        shell: bash
         run: |
-          if not exist skywater_segformer_b2_fp16.onnx ( echo FATAL: model not found && exit /b 1 )
+          test -f skywater_segformer_b2_fp16.onnx || { echo "FATAL: model not found"; exit 1; }
           cd demo/cxx/build
           ./skywater_infer.exe ../../skywater_segformer_b2_fp16.onnx ../../assets/photos/DSCF8980.jpg ci_mask.png cpu --iters 10
 

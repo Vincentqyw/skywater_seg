@@ -64,7 +64,7 @@ jobs:
         run: |
           test -f "$MODEL_PATH" || { echo "FATAL: model not found"; exit 1; }
           cd demo/cxx/build
-          ./skywater_infer "$MODEL_PATH" "$IMAGE_PATH" ci_mask.png cpu --iters 10
+          ./skywater_infer "$MODEL_PATH" "$IMAGE_PATH" ci_mask.png coreml --iters 10
 
       - name: Verify output
         run: |
